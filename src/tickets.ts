@@ -22,44 +22,48 @@ export async function fetchTicketProperties(): Promise<TicketProperty[]> {
   return props;
 }
 
-interface SearchResponse {
-  results: Array<{ id: string; properties: Record<string, string | null> }>;
+interface ListResponse {
+  results: Array<{ id: string }>;
   paging?: { next?: { after: string } };
 }
 
+interface BatchReadResponse {
+  results: Array<{ id: string; properties: Record<string, string | null> }>;
+}
+
 /**
- * Fetch all tickets using the Search API (POST) to avoid 414 errors
- * when requesting many properties — GET puts them in the URL, POST in the body.
+ * Fetch all tickets in two phases:
+ *   1. List ticket IDs via GET (no properties in URL → no 414)
+ *   2. Batch-read full properties via POST (no 3 000-char search body limit)
+ *
+ * This avoids both the 414 URI-too-large error from the GET list endpoint
+ * and the 400 body-too-large error from the Search API (which caps request
+ * bodies at 3 000 characters — far too small for 200+ property names).
  */
 export async function fetchAllTickets(
   properties: TicketProperty[],
 ): Promise<Ticket[]> {
   const propertyNames = properties.map((p) => p.name);
-  const tickets: Ticket[] = [];
+
+  // Phase 1 — collect every ticket ID via the list endpoint (GET, no props)
+  const allIds: string[] = [];
   let after: string | undefined;
   let page = 0;
 
-  console.log("Fetching all tickets...");
+  console.log("Fetching ticket IDs...");
   const startTime = Date.now();
 
   do {
-    const body: Record<string, unknown> = {
-      properties: propertyNames,
-      limit: 100,
-      filterGroups: [],
-      sorts: [{ propertyName: "hs_object_id", direction: "ASCENDING" }],
-    };
-    if (after) body.after = after;
+    const params: Record<string, string> = { limit: "100" };
+    if (after) params.after = after;
 
-    const response = await hubspotFetch<SearchResponse>(
-      "/crm/v3/objects/tickets/search",
-      undefined,
-      "POST",
-      body,
+    const response = await hubspotFetch<ListResponse>(
+      "/crm/v3/objects/tickets",
+      params,
     );
 
     for (const t of response.results) {
-      tickets.push({ id: t.id, properties: t.properties });
+      allIds.push(t.id);
     }
 
     after = response.paging?.next?.after;
@@ -67,9 +71,37 @@ export async function fetchAllTickets(
 
     if (page % 50 === 0 || !after) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(`  ...${tickets.length} tickets fetched (${elapsed}s elapsed)`);
+      console.log(`  ...${allIds.length} ticket IDs fetched (${elapsed}s elapsed)`);
     }
   } while (after);
+
+  // Phase 2 — batch-read full properties (POST, 100 IDs per request)
+  console.log("Fetching ticket properties via batch read...");
+  const tickets: Ticket[] = [];
+
+  for (let i = 0; i < allIds.length; i += 100) {
+    const batch = allIds.slice(i, i + 100);
+
+    const response = await hubspotFetch<BatchReadResponse>(
+      "/crm/v3/objects/tickets/batch/read",
+      undefined,
+      "POST",
+      {
+        inputs: batch.map((id) => ({ id })),
+        properties: propertyNames,
+        propertiesWithHistory: [],
+      },
+    );
+
+    for (const t of response.results) {
+      tickets.push({ id: t.id, properties: t.properties });
+    }
+
+    if ((i / 100 + 1) % 50 === 0 || i + 100 >= allIds.length) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`  ...${tickets.length} tickets hydrated (${elapsed}s elapsed)`);
+    }
+  }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`Fetched ${tickets.length} tickets in ${totalTime}s.`);
