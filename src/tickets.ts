@@ -32,20 +32,10 @@ interface BatchReadResponse {
 }
 
 /**
- * Fetch all tickets in two phases:
- *   1. List ticket IDs via GET (no properties in URL → no 414)
- *   2. Batch-read full properties via POST (no 3 000-char search body limit)
- *
- * This avoids both the 414 URI-too-large error from the GET list endpoint
- * and the 400 body-too-large error from the Search API (which caps request
- * bodies at 3 000 characters — far too small for 200+ property names).
+ * Fetch all ticket IDs via GET (no properties in URL → no 414).
+ * Returns just the ID strings — cheap to hold in memory even at 750k+.
  */
-export async function fetchAllTickets(
-  properties: TicketProperty[],
-): Promise<Ticket[]> {
-  const propertyNames = properties.map((p) => p.name);
-
-  // Phase 1 — collect every ticket ID via the list endpoint (GET, no props)
+export async function fetchAllTicketIds(): Promise<string[]> {
   const allIds: string[] = [];
   let after: string | undefined;
   let page = 0;
@@ -75,12 +65,24 @@ export async function fetchAllTickets(
     }
   } while (after);
 
-  // Phase 2 — batch-read full properties (POST, 100 IDs per request)
-  console.log("Fetching ticket properties via batch read...");
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`Fetched ${allIds.length} ticket IDs in ${totalTime}s.`);
+
+  return allIds;
+}
+
+/**
+ * Batch-read full properties for a set of ticket IDs via POST.
+ * Processes in groups of 100 (HubSpot batch limit).
+ */
+export async function fetchTicketsBatch(
+  ids: string[],
+  propertyNames: string[],
+): Promise<Ticket[]> {
   const tickets: Ticket[] = [];
 
-  for (let i = 0; i < allIds.length; i += 100) {
-    const batch = allIds.slice(i, i + 100);
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
 
     const response = await hubspotFetch<BatchReadResponse>(
       "/crm/v3/objects/tickets/batch/read",
@@ -96,15 +98,7 @@ export async function fetchAllTickets(
     for (const t of response.results) {
       tickets.push({ id: t.id, properties: t.properties });
     }
-
-    if ((i / 100 + 1) % 50 === 0 || i + 100 >= allIds.length) {
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(`  ...${tickets.length} tickets hydrated (${elapsed}s elapsed)`);
-    }
   }
-
-  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`Fetched ${tickets.length} tickets in ${totalTime}s.`);
 
   return tickets;
 }

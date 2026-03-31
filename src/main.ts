@@ -1,5 +1,5 @@
 import "@std/dotenv/load";
-import { fetchTicketProperties, fetchAllTickets } from "./tickets.ts";
+import { fetchTicketProperties, fetchAllTicketIds, fetchTicketsBatch } from "./tickets.ts";
 import {
   batchGetEmailAssociations,
   batchFetchEmails,
@@ -18,91 +18,106 @@ const CONCURRENCY = (() => {
   }
   return val;
 })();
+const CHUNK_SIZE = (() => {
+  const val = parseInt(Deno.env.get("CHUNK_SIZE") || "5000");
+  if (isNaN(val) || val < 1) {
+    throw new Error(`Invalid CHUNK_SIZE value: "${Deno.env.get("CHUNK_SIZE")}". Must be a positive integer.`);
+  }
+  return val;
+})();
 
 async function main() {
   console.log("=== HubSpot Ticket + Conversation Dump ===\n");
 
-  // 1. Discover properties and fetch all tickets
+  // 1. Discover properties and fetch all ticket IDs (cheap — just strings)
   const properties = await fetchTicketProperties();
-  const tickets = await fetchAllTickets(properties);
-  if (tickets.length === 0) {
+  const propertyNames = properties.map((p) => p.name);
+  const allTicketIds = await fetchAllTicketIds();
+  if (allTicketIds.length === 0) {
     console.log("No tickets found. Check your access token and scopes.");
     return;
   }
 
-  const allTicketIds = tickets.map((t) => t.id);
-
-  // 2. Batch fetch email associations (1000 per request)
-  console.log("\nFetching email associations in bulk...");
-  const emailAssociations = await batchGetEmailAssociations(allTicketIds);
-  const allEmailIds = [...new Set([...emailAssociations.values()].flat())];
-  console.log(
-    `Found ${allEmailIds.length} unique emails across ${emailAssociations.size} tickets.`,
-  );
-
-  // 3. Batch fetch all email content (100 per request)
-  console.log("Fetching email content in bulk...");
-  const emailCache = await batchFetchEmails(allEmailIds);
-  console.log(`Fetched ${emailCache.size} emails.`);
-
-  // 4. Fetch conversations in parallel, write to disk in order as results stream in
-  console.log(
-    `\nFetching conversations & writing output (concurrency: ${CONCURRENCY})...`,
-  );
+  // 2. Process in chunks to bound memory usage
   const writer = await DumpWriter.create(OUTPUT_DIR, properties);
   let processed = 0;
   let totalEmails = 0;
   let totalConversations = 0;
   let errors = 0;
   const startTime = Date.now();
+  const totalChunks = Math.ceil(allTicketIds.length / CHUNK_SIZE);
 
-  await parallelStream<typeof tickets[0], TicketDump>(
-    tickets,
-    CONCURRENCY,
-    // Fetch phase (parallel)
-    async (ticket) => {
-      const messages: Message[] = [];
-
-      const emails = getEmailsForTicket(ticket.id, emailAssociations, emailCache);
-      messages.push(...emails);
-      totalEmails += emails.length;
-
-      try {
-        const convos = await fetchConversationsForTicket(ticket.id);
-        messages.push(...convos);
-        totalConversations += convos.length;
-      } catch (err) {
-        console.warn(`  Warning: conversations for ticket ${ticket.id}: ${err}`);
-        errors++;
-      }
-
-      messages.sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-      );
-
-      processed++;
-      if (processed % 200 === 0 || processed === tickets.length) {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const rate = processed / elapsed;
-        const remaining = rate > 0 ? Math.ceil((tickets.length - processed) / rate) : 0;
-        const eta = remaining > 60
-          ? `${Math.floor(remaining / 60)}m ${remaining % 60}s`
-          : `${remaining}s`;
-        console.log(
-          `Progress: ${processed}/${tickets.length} (${((processed / tickets.length) * 100).toFixed(1)}%) | ` +
-          `${totalEmails} emails, ${totalConversations} convos | ` +
-          `${rate.toFixed(1)} tickets/s | ETA: ${processed < tickets.length ? eta : "done"}`,
-        );
-      }
-
-      return { ticket, messages };
-    },
-    // Flush phase (sequential, in original order)
-    async (dump) => {
-      await writer.writeTicket(dump);
-    },
+  console.log(
+    `\nProcessing ${allTicketIds.length} tickets in ${totalChunks} chunks of ${CHUNK_SIZE} (concurrency: ${CONCURRENCY})...\n`,
   );
+
+  for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+    const chunkIds = allTicketIds.slice(
+      chunkIdx * CHUNK_SIZE,
+      (chunkIdx + 1) * CHUNK_SIZE,
+    );
+    const chunkNum = chunkIdx + 1;
+
+    console.log(`--- Chunk ${chunkNum}/${totalChunks} (${chunkIds.length} tickets) ---`);
+
+    // 2a. Fetch ticket properties for this chunk
+    const tickets = await fetchTicketsBatch(chunkIds, propertyNames);
+
+    // 2b. Fetch email associations for this chunk
+    const emailAssociations = await batchGetEmailAssociations(chunkIds);
+    const chunkEmailIds = [...new Set([...emailAssociations.values()].flat())];
+
+    // 2c. Fetch email content for this chunk
+    const emailCache = await batchFetchEmails(chunkEmailIds);
+
+    // 2d. Fetch conversations & write output for this chunk
+    await parallelStream<typeof tickets[0], TicketDump>(
+      tickets,
+      CONCURRENCY,
+      async (ticket) => {
+        const messages: Message[] = [];
+
+        const emails = getEmailsForTicket(ticket.id, emailAssociations, emailCache);
+        messages.push(...emails);
+        totalEmails += emails.length;
+
+        try {
+          const convos = await fetchConversationsForTicket(ticket.id);
+          messages.push(...convos);
+          totalConversations += convos.length;
+        } catch (err) {
+          console.warn(`  Warning: conversations for ticket ${ticket.id}: ${err}`);
+          errors++;
+        }
+
+        messages.sort(
+          (a, b) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        );
+
+        processed++;
+        if (processed % 200 === 0 || processed === allTicketIds.length) {
+          const elapsed = (Date.now() - startTime) / 1000;
+          const rate = processed / elapsed;
+          const remaining = rate > 0 ? Math.ceil((allTicketIds.length - processed) / rate) : 0;
+          const eta = remaining > 60
+            ? `${Math.floor(remaining / 60)}m ${remaining % 60}s`
+            : `${remaining}s`;
+          console.log(
+            `Progress: ${processed}/${allTicketIds.length} (${((processed / allTicketIds.length) * 100).toFixed(1)}%) | ` +
+            `${totalEmails} emails, ${totalConversations} convos | ` +
+            `${rate.toFixed(1)} tickets/s | ETA: ${processed < allTicketIds.length ? eta : "done"}`,
+          );
+        }
+
+        return { ticket, messages };
+      },
+      async (dump) => {
+        await writer.writeTicket(dump);
+      },
+    );
+    // chunk data (tickets, emailAssociations, emailCache) falls out of scope here → GC reclaims
+  }
 
   await writer.close();
   const stats = writer.stats;
