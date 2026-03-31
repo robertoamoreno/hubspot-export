@@ -35,6 +35,12 @@ function csvEscape(value: string): string {
   return value;
 }
 
+export interface FilePositions {
+  ticketsCsv: number;
+  messagesCsv: number;
+  dumpJsonl: number;
+}
+
 export class DumpWriter {
   private ticketsFile: Deno.FsFile;
   private messagesFile: Deno.FsFile;
@@ -59,9 +65,15 @@ export class DumpWriter {
     this.portalId = portalId;
   }
 
+  /**
+   * Create a DumpWriter. When `resume` is provided, files are opened in
+   * append mode and truncated to the checkpoint's saved byte positions
+   * (removing any partial chunk data from a crash). Headers are not re-written.
+   */
   static async create(
     outputDir: string,
     properties: TicketProperty[],
+    resume?: FilePositions,
   ): Promise<DumpWriter> {
     const portalId = Deno.env.get("HUBSPOT_PORTAL_ID");
     if (!portalId) {
@@ -72,6 +84,30 @@ export class DumpWriter {
 
     await Deno.mkdir(outputDir, { recursive: true });
 
+    if (resume) {
+      // Truncate files to the last known-good positions (removes partial chunk data)
+      await Deno.truncate(`${outputDir}/tickets.csv`, resume.ticketsCsv);
+      await Deno.truncate(`${outputDir}/messages.csv`, resume.messagesCsv);
+      await Deno.truncate(`${outputDir}/dump.jsonl`, resume.dumpJsonl);
+
+      // Open in append mode
+      const ticketsFile = await Deno.open(`${outputDir}/tickets.csv`, {
+        write: true,
+        append: true,
+      });
+      const messagesFile = await Deno.open(`${outputDir}/messages.csv`, {
+        write: true,
+        append: true,
+      });
+      const jsonlFile = await Deno.open(`${outputDir}/dump.jsonl`, {
+        write: true,
+        append: true,
+      });
+
+      return new DumpWriter(ticketsFile, messagesFile, jsonlFile, properties, portalId);
+    }
+
+    // Fresh start — truncate and write headers
     const ticketsFile = await Deno.open(`${outputDir}/tickets.csv`, {
       write: true,
       create: true,
@@ -138,6 +174,15 @@ export class DumpWriter {
 
     // Write JSONL
     await this.writeLine(this.jsonlFile, JSON.stringify(dump));
+  }
+
+  /** Get current byte positions of all output files (for checkpointing). */
+  async getFilePositions(): Promise<FilePositions> {
+    return {
+      ticketsCsv: await this.ticketsFile.seek(0, Deno.SeekMode.Current),
+      messagesCsv: await this.messagesFile.seek(0, Deno.SeekMode.Current),
+      dumpJsonl: await this.jsonlFile.seek(0, Deno.SeekMode.Current),
+    };
   }
 
   async close(): Promise<void> {
