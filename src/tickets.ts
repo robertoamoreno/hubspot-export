@@ -31,6 +31,66 @@ interface BatchReadResponse {
   results: Array<{ id: string; properties: Record<string, string | null> }>;
 }
 
+interface SearchResponse {
+  results: Array<{ id: string }>;
+  paging?: { next?: { after: string } };
+  total: number;
+}
+
+/**
+ * Fetch ticket IDs for a specific year using the Search API.
+ * Queries month-by-month to stay under HubSpot's 10k-per-query limit.
+ */
+export async function fetchTicketIdsByYear(year: number): Promise<string[]> {
+  const allIds: string[] = [];
+  console.log(`Fetching ticket IDs for year ${year}...`);
+  const startTime = Date.now();
+
+  for (let month = 0; month < 12; month++) {
+    const fromMs = Date.UTC(year, month, 1);
+    const toMs = Date.UTC(year, month + 1, 1);
+    let after: string | undefined;
+    let monthCount = 0;
+
+    do {
+      const body: Record<string, unknown> = {
+        filterGroups: [{
+          filters: [
+            { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
+            { propertyName: "createdate", operator: "LT", value: String(toMs) },
+          ],
+        }],
+        sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
+        limit: 100,
+      };
+      if (after) body.after = after;
+
+      const response = await hubspotFetch<SearchResponse>(
+        "/crm/v3/objects/tickets/search",
+        undefined,
+        "POST",
+        body,
+      );
+
+      for (const t of response.results) {
+        allIds.push(t.id);
+        monthCount++;
+      }
+
+      after = response.paging?.next?.after;
+    } while (after);
+
+    if (monthCount > 0) {
+      const monthName = new Date(fromMs).toLocaleString("en", { month: "short" });
+      console.log(`  ${monthName} ${year}: ${monthCount} tickets`);
+    }
+  }
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`Fetched ${allIds.length} ticket IDs for ${year} in ${totalTime}s.`);
+  return allIds;
+}
+
 /**
  * Fetch all ticket IDs via GET (no properties in URL → no 414).
  * Returns just the ID strings — cheap to hold in memory even at 750k+.
