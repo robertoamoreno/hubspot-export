@@ -88,6 +88,16 @@ docker run --env-file .env -e YEAR=2025 -v "$(pwd)/output:/app/output" tempestdx
 
 This uses the HubSpot Search API to only fetch tickets created in the specified year. Only months up to the current date are queried (future months are skipped). Date ranges with more than 10,000 tickets are automatically split into smaller ranges to stay within HubSpot's search API limits.
 
+### Skipping conversations (emails only)
+
+If you only need email data and want to dramatically reduce API usage (~3,300 calls instead of ~242,000 for 90k tickets):
+
+```bash
+docker run --env-file .env -e SKIP_CONVERSATIONS=true -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
+```
+
+Conversation threads (live chat, chatbot, Messenger) are the most API-intensive part of the export since HubSpot has no batch endpoint for them. Email data already captures most support interactions (incoming/outgoing emails with full content, sender, recipient, and timestamps).
+
 ### Resuming an interrupted export
 
 If the export is stopped or crashes, just run the same command again. It will automatically:
@@ -245,3 +255,4 @@ Check the terminal output for errors. Common causes:
 | `CONCURRENCY` | No | `10` | Number of parallel conversation fetches. Lower if you hit rate limits |
 | `CHUNK_SIZE` | No | `5000` | Number of tickets per processing chunk. Lower to reduce memory usage |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
+| `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |

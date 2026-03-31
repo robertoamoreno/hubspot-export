@@ -9,6 +9,8 @@ import { fetchConversationsForTicket } from "./conversations.ts";
 import { DumpWriter } from "./export.ts";
 import type { Message, TicketDump } from "./export.ts";
 import { parallelStream } from "./hubspot.ts";
+
+const SKIP_CONVERSATIONS = (Deno.env.get("SKIP_CONVERSATIONS") || "").toLowerCase() === "true";
 import {
   loadCheckpoint,
   saveCheckpoint,
@@ -46,6 +48,9 @@ const YEAR: number | undefined = (() => {
 
 async function main() {
   console.log("=== HubSpot Ticket + Conversation Dump ===\n");
+  if (SKIP_CONVERSATIONS) {
+    console.log("SKIP_CONVERSATIONS=true — fetching emails only (no conversation threads)\n");
+  }
 
   await Deno.mkdir(OUTPUT_DIR, { recursive: true });
 
@@ -158,13 +163,15 @@ async function main() {
         messages.push(...emails);
         totalEmails += emails.length;
 
-        try {
-          const convos = await fetchConversationsForTicket(ticket.id);
-          messages.push(...convos);
-          totalConversations += convos.length;
-        } catch (err) {
-          console.warn(`  Warning: conversations for ticket ${ticket.id}: ${err}`);
-          errors++;
+        if (!SKIP_CONVERSATIONS) {
+          try {
+            const convos = await fetchConversationsForTicket(ticket.id);
+            messages.push(...convos);
+            totalConversations += convos.length;
+          } catch (err) {
+            console.warn(`  Warning: conversations for ticket ${ticket.id}: ${err}`);
+            errors++;
+          }
         }
 
         messages.sort(
