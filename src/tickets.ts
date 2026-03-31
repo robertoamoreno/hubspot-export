@@ -38,53 +38,104 @@ interface SearchResponse {
 }
 
 /**
+ * Fetch ticket IDs within a date range using the Search API.
+ * If the range contains >10k results (HubSpot's search limit),
+ * it automatically splits the range in half and recurses.
+ */
+async function fetchIdsForDateRange(
+  fromMs: number,
+  toMs: number,
+  label: string,
+): Promise<string[]> {
+  // Probe the total count first
+  const probeBody = {
+    filterGroups: [{
+      filters: [
+        { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
+        { propertyName: "createdate", operator: "LT", value: String(toMs) },
+      ],
+    }],
+    sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
+    properties: ["hs_object_id"],
+    limit: 1,
+  };
+
+  const probe = await hubspotFetch<SearchResponse>(
+    "/crm/v3/objects/tickets/search",
+    undefined,
+    "POST",
+    probeBody,
+  );
+
+  if (probe.total === 0) return [];
+
+  // If >10k, split the range in half and recurse
+  if (probe.total > 10000) {
+    const midMs = fromMs + Math.floor((toMs - fromMs) / 2);
+    const fmtDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const firstHalf = await fetchIdsForDateRange(fromMs, midMs, `${fmtDate(fromMs)}..${fmtDate(midMs)}`);
+    const secondHalf = await fetchIdsForDateRange(midMs, toMs, `${fmtDate(midMs)}..${fmtDate(toMs)}`);
+    return firstHalf.concat(secondHalf);
+  }
+
+  // <=10k results, safe to paginate fully
+  const ids: string[] = [];
+  let after: string | undefined;
+
+  do {
+    const body: Record<string, unknown> = {
+      filterGroups: [{
+        filters: [
+          { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
+          { propertyName: "createdate", operator: "LT", value: String(toMs) },
+        ],
+      }],
+      sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
+      properties: ["hs_object_id"],
+      limit: 100,
+    };
+    if (after) body.after = after;
+
+    const response = await hubspotFetch<SearchResponse>(
+      "/crm/v3/objects/tickets/search",
+      undefined,
+      "POST",
+      body,
+    );
+
+    for (const t of response.results) {
+      ids.push(t.id);
+    }
+
+    after = response.paging?.next?.after;
+  } while (after);
+
+  console.log(`  ${label}: ${ids.length} tickets`);
+  return ids;
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
  * Fetch ticket IDs for a specific year using the Search API.
- * Queries month-by-month to stay under HubSpot's 10k-per-query limit.
+ * Queries month-by-month, automatically splitting months with >10k
+ * tickets into smaller date ranges to stay under HubSpot's search limit.
+ * Skips future months that haven't occurred yet.
  */
 export async function fetchTicketIdsByYear(year: number): Promise<string[]> {
   const allIds: string[] = [];
   console.log(`Fetching ticket IDs for year ${year}...`);
   const startTime = Date.now();
+  const nowMs = Date.now();
 
   for (let month = 0; month < 12; month++) {
     const fromMs = Date.UTC(year, month, 1);
-    const toMs = Date.UTC(year, month + 1, 1);
-    let after: string | undefined;
-    let monthCount = 0;
-
-    do {
-      const body: Record<string, unknown> = {
-        filterGroups: [{
-          filters: [
-            { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
-            { propertyName: "createdate", operator: "LT", value: String(toMs) },
-          ],
-        }],
-        sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
-        properties: ["hs_object_id"],
-        limit: 100,
-      };
-      if (after) body.after = after;
-
-      const response = await hubspotFetch<SearchResponse>(
-        "/crm/v3/objects/tickets/search",
-        undefined,
-        "POST",
-        body,
-      );
-
-      for (const t of response.results) {
-        allIds.push(t.id);
-        monthCount++;
-      }
-
-      after = response.paging?.next?.after;
-    } while (after);
-
-    if (monthCount > 0) {
-      const monthName = new Date(fromMs).toLocaleString("en", { month: "short" });
-      console.log(`  ${monthName} ${year}: ${monthCount} tickets`);
-    }
+    // Skip months that haven't started yet
+    if (fromMs > nowMs) break;
+    const toMs = Math.min(Date.UTC(year, month + 1, 1), nowMs);
+    const ids = await fetchIdsForDateRange(fromMs, toMs, `${MONTH_NAMES[month]} ${year}`);
+    allIds.push(...ids);
   }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
