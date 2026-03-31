@@ -61,6 +61,7 @@ export async function fetchTicketIdsByYear(year: number): Promise<string[]> {
           ],
         }],
         sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
+        properties: ["hs_object_id"],
         limit: 100,
       };
       if (after) body.after = after;
