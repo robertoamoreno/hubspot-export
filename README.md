@@ -86,7 +86,7 @@ For large accounts, you can filter to a single year to keep export times managea
 docker run --env-file .env -e YEAR=2025 -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
 ```
 
-This uses the HubSpot Search API to only fetch tickets created in the specified year.
+This uses the HubSpot Search API to only fetch tickets created in the specified year. Only months up to the current date are queried (future months are skipped). Date ranges with more than 10,000 tickets are automatically split into smaller ranges to stay within HubSpot's search API limits.
 
 ### Resuming an interrupted export
 
@@ -244,4 +244,4 @@ Check the terminal output for errors. Common causes:
 | `OUTPUT_DIR` | No | `./output` | Where to save the dump files |
 | `CONCURRENCY` | No | `10` | Number of parallel conversation fetches. Lower if you hit rate limits |
 | `CHUNK_SIZE` | No | `5000` | Number of tickets per processing chunk. Lower to reduce memory usage |
-| `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API instead of listing all tickets |
+| `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
