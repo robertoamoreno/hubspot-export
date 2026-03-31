@@ -1,4 +1,4 @@
-import { getClient } from "./hubspot.ts";
+import { getClient, hubspotFetch } from "./hubspot.ts";
 
 export interface TicketProperty {
   name: string;
@@ -22,11 +22,18 @@ export async function fetchTicketProperties(): Promise<TicketProperty[]> {
   return props;
 }
 
-/** Fetch all tickets with manual pagination and progress logging. */
+interface SearchResponse {
+  results: Array<{ id: string; properties: Record<string, string | null> }>;
+  paging?: { next?: { after: string } };
+}
+
+/**
+ * Fetch all tickets using the Search API (POST) to avoid 414 errors
+ * when requesting many properties — GET puts them in the URL, POST in the body.
+ */
 export async function fetchAllTickets(
   properties: TicketProperty[],
 ): Promise<Ticket[]> {
-  const client = getClient();
   const propertyNames = properties.map((p) => p.name);
   const tickets: Ticket[] = [];
   let after: string | undefined;
@@ -36,13 +43,19 @@ export async function fetchAllTickets(
   const startTime = Date.now();
 
   do {
-    const response = await client.crm.tickets.basicApi.getPage(
-      100,
-      after,
-      propertyNames,
+    const body: Record<string, unknown> = {
+      properties: propertyNames,
+      limit: 100,
+      filterGroups: [],
+      sorts: [{ propertyName: "hs_object_id", direction: "ASCENDING" }],
+    };
+    if (after) body.after = after;
+
+    const response = await hubspotFetch<SearchResponse>(
+      "/crm/v3/objects/tickets/search",
       undefined,
-      undefined,
-      false,
+      "POST",
+      body,
     );
 
     for (const t of response.results) {
