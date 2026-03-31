@@ -89,8 +89,8 @@ async function main() {
     console.log(`Filtering tickets to year: ${YEAR}\n`);
   }
 
-  // --- Load or fetch ticket properties ---
-  let properties = resuming ? await loadProperties(OUTPUT_DIR) : null;
+  // --- Load or fetch ticket properties (always try cache first) ---
+  let properties = await loadProperties(OUTPUT_DIR);
   if (!properties) {
     properties = await fetchTicketProperties();
     await saveProperties(OUTPUT_DIR, properties);
@@ -99,8 +99,8 @@ async function main() {
   }
   const propertyNames = properties.map((p) => p.name);
 
-  // --- Load or fetch ticket IDs ---
-  let allTicketIds = resuming ? await loadTicketIds(OUTPUT_DIR, YEAR) : null;
+  // --- Load or fetch ticket IDs (always try cache first) ---
+  let allTicketIds = await loadTicketIds(OUTPUT_DIR, YEAR);
   if (!allTicketIds) {
     allTicketIds = YEAR
       ? await fetchTicketIdsByYear(YEAR)
