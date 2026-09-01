@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@^1";
+import { assertEquals } from "@std/assert";
 import { batchGetEmailAssociations, fetchWithSplit } from "./emails.ts";
 import { errorStatus, HubSpotApiError, isSplittable } from "./hubspot.ts";
 

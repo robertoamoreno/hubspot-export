@@ -1,17 +1,28 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/async@1": "1.2.0",
     "jsr:@std/dotenv@~0.225.3": "0.225.6",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
     "npm:@hubspot/api-client@^13.5.0": "13.5.0",
     "npm:html-to-text@^9.0.5": "9.0.5"
   },
   "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
     "@std/async@1.2.0": {
       "integrity": "c059c6f6d95ca7cc012ae8e8d7164d1697113d54b0b679e4372b354b11c2dee5"
     },
     "@std/dotenv@0.225.6": {
       "integrity": "1d6f9db72f565bd26790fa034c26e45ecb260b5245417be76c2279e5734c421b"
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     }
   },
   "npm": {
@@ -25,52 +36,62 @@
         "form-data",
         "lodash.merge",
         "node-fetch"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/@hubspot/api-client/-/api-client-13.5.0.tgz"
     },
     "@selderee/plugin-htmlparser2@0.11.0": {
       "integrity": "sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ==",
       "dependencies": [
         "domhandler",
         "selderee"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/@selderee/plugin-htmlparser2/-/plugin-htmlparser2-0.11.0.tgz"
     },
     "@types/node-fetch@2.6.13": {
       "integrity": "sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==",
       "dependencies": [
         "@types/node",
         "form-data"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/@types/node-fetch/-/node-fetch-2.6.13.tgz"
     },
     "@types/node@25.5.0": {
       "integrity": "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==",
       "dependencies": [
         "undici-types"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/@types/node/-/node-25.5.0.tgz"
     },
     "asynckit@0.4.0": {
-      "integrity": "sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q=="
+      "integrity": "c79ed97f7f34cb8f2ba1bc9790bcc366474b4b79",
+      "tarball": "http://npm.rmcloud.com:8123/asynckit/-/asynckit-0.4.0.tgz"
     },
     "bottleneck@2.19.5": {
-      "integrity": "sha512-VHiNCbI1lKdl44tGrhNfU3lup0Tj/ZBMJB5/2ZbNXRCPuRCO7ed2mgcK4r17y+KB2EfuYuRaVlwNbAeaWGSpbw=="
+      "integrity": "sha512-VHiNCbI1lKdl44tGrhNfU3lup0Tj/ZBMJB5/2ZbNXRCPuRCO7ed2mgcK4r17y+KB2EfuYuRaVlwNbAeaWGSpbw==",
+      "tarball": "http://npm.rmcloud.com:8123/bottleneck/-/bottleneck-2.19.5.tgz"
     },
     "call-bind-apply-helpers@1.0.2": {
       "integrity": "sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==",
       "dependencies": [
         "es-errors",
         "function-bind"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/call-bind-apply-helpers/-/call-bind-apply-helpers-1.0.2.tgz"
     },
     "combined-stream@1.0.8": {
       "integrity": "sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==",
       "dependencies": [
         "delayed-stream"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/combined-stream/-/combined-stream-1.0.8.tgz"
     },
     "deepmerge@4.3.1": {
-      "integrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A=="
+      "integrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==",
+      "tarball": "http://npm.rmcloud.com:8123/deepmerge/-/deepmerge-4.3.1.tgz"
     },
     "delayed-stream@1.0.0": {
-      "integrity": "sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ=="
+      "integrity": "df3ae199acadfb7d440aaae0b29e2272b24ec619",
+      "tarball": "http://npm.rmcloud.com:8123/delayed-stream/-/delayed-stream-1.0.0.tgz"
     },
     "dom-serializer@2.0.0": {
       "integrity": "sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==",
@@ -78,16 +99,19 @@
         "domelementtype",
         "domhandler",
         "entities"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/dom-serializer/-/dom-serializer-2.0.0.tgz"
     },
     "domelementtype@2.3.0": {
-      "integrity": "sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw=="
+      "integrity": "sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==",
+      "tarball": "http://npm.rmcloud.com:8123/domelementtype/-/domelementtype-2.3.0.tgz"
     },
     "domhandler@5.0.3": {
       "integrity": "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==",
       "dependencies": [
         "domelementtype"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/domhandler/-/domhandler-5.0.3.tgz"
     },
     "domutils@3.2.2": {
       "integrity": "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==",
@@ -95,7 +119,8 @@
         "dom-serializer",
         "domelementtype",
         "domhandler"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/domutils/-/domutils-3.2.2.tgz"
     },
     "dunder-proto@1.0.1": {
       "integrity": "sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==",
@@ -103,22 +128,27 @@
         "call-bind-apply-helpers",
         "es-errors",
         "gopd"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/dunder-proto/-/dunder-proto-1.0.1.tgz"
     },
     "entities@4.5.0": {
-      "integrity": "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="
+      "integrity": "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==",
+      "tarball": "http://npm.rmcloud.com:8123/entities/-/entities-4.5.0.tgz"
     },
     "es-define-property@1.0.1": {
-      "integrity": "sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g=="
+      "integrity": "sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==",
+      "tarball": "http://npm.rmcloud.com:8123/es-define-property/-/es-define-property-1.0.1.tgz"
     },
     "es-errors@1.3.0": {
-      "integrity": "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw=="
+      "integrity": "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==",
+      "tarball": "http://npm.rmcloud.com:8123/es-errors/-/es-errors-1.3.0.tgz"
     },
     "es-object-atoms@1.1.1": {
       "integrity": "sha512-FGgH2h8zKNim9ljj7dankFPcICIK9Cp5bm+c2gQSYePhpaG5+esrLODihIorn+Pe6FGJzWhXQotPv73jTaldXA==",
       "dependencies": [
         "es-errors"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/es-object-atoms/-/es-object-atoms-1.1.1.tgz"
     },
     "es-set-tostringtag@2.1.0": {
       "integrity": "sha512-j6vWzfrGVfyXxge+O0x5sh6cvxAog0a/4Rdd2K36zCMV5eJ+/+tOAngRO8cODMNWbVRdVlmGZQL2YS3yR8bIUA==",
@@ -127,10 +157,12 @@
         "get-intrinsic",
         "has-tostringtag",
         "hasown"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/es-set-tostringtag/-/es-set-tostringtag-2.1.0.tgz"
     },
     "es6-promise@4.2.8": {
-      "integrity": "sha512-HJDGx5daxeIvxdBxvG2cb9g4tEvwIk3i8+nhX0yGrYmZUzbkdg8QbDevheDB8gd0//uPj4c1EQua8Q+MViT0/w=="
+      "integrity": "sha512-HJDGx5daxeIvxdBxvG2cb9g4tEvwIk3i8+nhX0yGrYmZUzbkdg8QbDevheDB8gd0//uPj4c1EQua8Q+MViT0/w==",
+      "tarball": "http://npm.rmcloud.com:8123/es6-promise/-/es6-promise-4.2.8.tgz"
     },
     "form-data@4.0.5": {
       "integrity": "sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==",
@@ -140,10 +172,12 @@
         "es-set-tostringtag",
         "hasown",
         "mime-types"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/form-data/-/form-data-4.0.5.tgz"
     },
     "function-bind@1.1.2": {
-      "integrity": "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="
+      "integrity": "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==",
+      "tarball": "http://npm.rmcloud.com:8123/function-bind/-/function-bind-1.1.2.tgz"
     },
     "get-intrinsic@1.3.0": {
       "integrity": "sha512-9fSjSaos/fRIVIp+xSJlE6lfwhES7LNtKaCBIamHsjr2na1BiABJPo0mOjjz8GJDURarmCPGqaiVg5mfjb98CQ==",
@@ -158,32 +192,38 @@
         "has-symbols",
         "hasown",
         "math-intrinsics"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/get-intrinsic/-/get-intrinsic-1.3.0.tgz"
     },
     "get-proto@1.0.1": {
       "integrity": "sha512-sTSfBjoXBp89JvIKIefqw7U2CCebsc74kiY6awiGogKtoSGbgjYE/G/+l9sF3MWFPNc9IcoOC4ODfKHfxFmp0g==",
       "dependencies": [
         "dunder-proto",
         "es-object-atoms"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/get-proto/-/get-proto-1.0.1.tgz"
     },
     "gopd@1.2.0": {
-      "integrity": "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="
+      "integrity": "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==",
+      "tarball": "http://npm.rmcloud.com:8123/gopd/-/gopd-1.2.0.tgz"
     },
     "has-symbols@1.1.0": {
-      "integrity": "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ=="
+      "integrity": "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ==",
+      "tarball": "http://npm.rmcloud.com:8123/has-symbols/-/has-symbols-1.1.0.tgz"
     },
     "has-tostringtag@1.0.2": {
       "integrity": "sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==",
       "dependencies": [
         "has-symbols"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/has-tostringtag/-/has-tostringtag-1.0.2.tgz"
     },
     "hasown@2.0.2": {
       "integrity": "sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==",
       "dependencies": [
         "function-bind"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/hasown/-/hasown-2.0.2.tgz"
     },
     "html-to-text@9.0.5": {
       "integrity": "sha512-qY60FjREgVZL03vJU6IfMV4GDjGBIoOyvuFdpBDIX9yTlDw0TjxVBQp+P8NvpdIXNJvfWBTNul7fsAQJq2FNpg==",
@@ -193,7 +233,8 @@
         "dom-serializer",
         "htmlparser2",
         "selderee"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/html-to-text/-/html-to-text-9.0.5.tgz"
     },
     "htmlparser2@8.0.2": {
       "integrity": "sha512-GYdjWKDkbRLkZ5geuHs5NY1puJ+PXwP7+fHPRz06Eirsb9ugf6d8kkXav6ADhcODhFFPMIXyxkxSuMf3D6NCFA==",
@@ -202,67 +243,82 @@
         "domhandler",
         "domutils",
         "entities"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/htmlparser2/-/htmlparser2-8.0.2.tgz"
     },
     "leac@0.6.0": {
-      "integrity": "sha512-y+SqErxb8h7nE/fiEX07jsbuhrpO9lL8eca7/Y1nuWV2moNlXhyd59iDGcRf6moVyDMbmTNzL40SUyrFU/yDpg=="
+      "integrity": "sha512-y+SqErxb8h7nE/fiEX07jsbuhrpO9lL8eca7/Y1nuWV2moNlXhyd59iDGcRf6moVyDMbmTNzL40SUyrFU/yDpg==",
+      "tarball": "http://npm.rmcloud.com:8123/leac/-/leac-0.6.0.tgz"
     },
     "lodash.merge@4.6.2": {
-      "integrity": "sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ=="
+      "integrity": "sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==",
+      "tarball": "http://npm.rmcloud.com:8123/lodash.merge/-/lodash.merge-4.6.2.tgz"
     },
     "math-intrinsics@1.1.0": {
-      "integrity": "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="
+      "integrity": "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==",
+      "tarball": "http://npm.rmcloud.com:8123/math-intrinsics/-/math-intrinsics-1.1.0.tgz"
     },
     "mime-db@1.52.0": {
-      "integrity": "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg=="
+      "integrity": "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==",
+      "tarball": "http://npm.rmcloud.com:8123/mime-db/-/mime-db-1.52.0.tgz"
     },
     "mime-types@2.1.35": {
       "integrity": "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==",
       "dependencies": [
         "mime-db"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/mime-types/-/mime-types-2.1.35.tgz"
     },
     "node-fetch@2.7.0": {
       "integrity": "sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==",
       "dependencies": [
         "whatwg-url"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/node-fetch/-/node-fetch-2.7.0.tgz"
     },
     "parseley@0.12.1": {
       "integrity": "sha512-e6qHKe3a9HWr0oMRVDTRhKce+bRO8VGQR3NyVwcjwrbhMmFCX9KszEV35+rn4AdilFAq9VPxP/Fe1wC9Qjd2lw==",
       "dependencies": [
         "leac",
         "peberminta"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/parseley/-/parseley-0.12.1.tgz"
     },
     "peberminta@0.9.0": {
-      "integrity": "sha512-XIxfHpEuSJbITd1H3EeQwpcZbTLHc+VVr8ANI9t5sit565tsI4/xK3KWTUFE2e6QiangUkh3B0jihzmGnNrRsQ=="
+      "integrity": "sha512-XIxfHpEuSJbITd1H3EeQwpcZbTLHc+VVr8ANI9t5sit565tsI4/xK3KWTUFE2e6QiangUkh3B0jihzmGnNrRsQ==",
+      "tarball": "http://npm.rmcloud.com:8123/peberminta/-/peberminta-0.9.0.tgz"
     },
     "selderee@0.11.0": {
       "integrity": "sha512-5TF+l7p4+OsnP8BCCvSyZiSPc4x4//p5uPwK8TCnVPJYRmU2aYKMpOXvw8zM5a5JvuuCGN1jmsMwuU2W02ukfA==",
       "dependencies": [
         "parseley"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/selderee/-/selderee-0.11.0.tgz"
     },
     "tr46@0.0.3": {
-      "integrity": "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="
+      "integrity": "8184fd347dac9cdc185992f3a6622e14b9d9ab6a",
+      "tarball": "http://npm.rmcloud.com:8123/tr46/-/tr46-0.0.3.tgz"
     },
     "undici-types@7.18.2": {
-      "integrity": "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="
+      "integrity": "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==",
+      "tarball": "http://npm.rmcloud.com:8123/undici-types/-/undici-types-7.18.2.tgz"
     },
     "webidl-conversions@3.0.1": {
-      "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="
+      "integrity": "24534275e2a7bc6be7bc86611cc16ae0a5654871",
+      "tarball": "http://npm.rmcloud.com:8123/webidl-conversions/-/webidl-conversions-3.0.1.tgz"
     },
     "whatwg-url@5.0.0": {
-      "integrity": "sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==",
+      "integrity": "966454e8765462e37644d3626f6742ce8b70965d",
       "dependencies": [
         "tr46",
         "webidl-conversions"
-      ]
+      ],
+      "tarball": "http://npm.rmcloud.com:8123/whatwg-url/-/whatwg-url-5.0.0.tgz"
     }
   },
   "workspace": {
     "dependencies": [
+      "jsr:@std/assert@1",
       "jsr:@std/async@1",
       "jsr:@std/dotenv@~0.225.3",
       "npm:@hubspot/api-client@^13.5.0",
