@@ -104,6 +104,13 @@ tickets. Combine it with `YEAR` to narrow further:
 docker run --env-file .env -e PIPELINE=0 -e YEAR=2025 -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
 ```
 
+Filtering to a pipeline also trims the ticket columns. HubSpot generates four
+properties per pipeline *stage* (date entered, date exited, cumulative time in,
+latest time in), and a ticket in one pipeline can never hold a value for
+another pipeline's stages. On a portal with 32 pipelines and 208 stages that
+removed 760 of 1,460 columns — and shrinks every batch request by the same
+proportion, so the export runs faster too.
+
 Pipeline-filtered runs go through the Search API (the plain list endpoint
 can't filter), splitting large date ranges the same way the `YEAR` filter does.
 Cached ticket ids are stored per filter combination, so a pipeline run never
@@ -224,6 +231,7 @@ The `output/` folder also contains files used for caching and resume:
 | `ticket_ids_2025.json` | Cached ticket IDs for year-filtered runs |
 | `ticket_ids_p0_2025.json` | Cached ticket IDs per pipeline (`p<id>`) and year |
 | `properties.json` | Cached property definitions |
+| `properties_p0.json` | Cached property definitions for a pipeline-filtered run (`p<id>`) |
 | `checkpoint.json` | Current progress (deleted on successful completion) |
 
 These are safe to delete if you want to force a fresh export.
