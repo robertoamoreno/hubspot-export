@@ -270,3 +270,33 @@ Check the terminal output for errors. Common causes:
 | `CHUNK_SIZE` | No | `5000` | Number of tickets per processing chunk. Lower to reduce memory usage |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
 | `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |
+
+## Development
+
+The project pins Deno 2.7.4 in the Dockerfile, and `deno.lock` is version 5 —
+older Deno releases can't read it. Rather than installing Deno locally, run the
+toolchain out of the same pinned image:
+
+```bash
+# Tests
+docker run --rm -v "$(pwd):/app" -w /app denoland/deno:2.7.4 task test
+
+# Lint
+docker run --rm -v "$(pwd):/app" -w /app denoland/deno:2.7.4 lint
+
+# Type check (needs an explicit entrypoint — `check` isn't one of the
+# subcommands the image's entrypoint script forwards on its own)
+docker run --rm -v "$(pwd):/app" -w /app --entrypoint deno denoland/deno:2.7.4 check src/*.ts
+```
+
+To build the runtime image locally:
+
+```bash
+docker build -t hubspot-export:local .
+```
+
+`scripts/build-and-push.sh` also pushes to Docker Hub and creates a git tag —
+use a plain `docker build` for local work.
+
+Test files live next to the code as `src/*_test.ts` and are excluded from the
+runtime image via `.dockerignore`.
