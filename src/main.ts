@@ -76,7 +76,7 @@ async function main() {
   // --- Check for existing checkpoint ---
   const checkpoint = await loadCheckpoint(OUTPUT_DIR);
   let resuming = false;
-  let startChunk = 0;
+  let startIndex = 0;
   let processed = 0;
   let totalEmails = 0;
   let totalConversations = 0;
@@ -102,14 +102,26 @@ async function main() {
       await clearCheckpoint(OUTPUT_DIR);
     } else {
       resuming = true;
-      startChunk = checkpoint.nextChunk;
+      if (checkpoint.nextTicketIndex !== undefined) {
+        startIndex = checkpoint.nextTicketIndex;
+      } else {
+        // Written before the offset was recorded. The chunk size that produced
+        // it was never stored, so this can only assume the current one.
+        startIndex = (checkpoint.nextChunk ?? 0) * CHUNK_SIZE;
+        console.warn(
+          `Checkpoint predates absolute ticket offsets. Resuming at ticket ` +
+          `${startIndex}, which assumes it was written with the current ` +
+          `CHUNK_SIZE=${CHUNK_SIZE}. If the interrupted run used a different ` +
+          `CHUNK_SIZE, delete checkpoint.json and start over.\n`,
+        );
+      }
       processed = checkpoint.stats.processed;
       totalEmails = checkpoint.stats.totalEmails;
       totalConversations = checkpoint.stats.totalConversations;
       errors = checkpoint.stats.errors;
       incompleteTickets = checkpoint.stats.incompleteTickets ?? 0;
       console.log(
-        `Resuming from checkpoint: chunk ${startChunk} ` +
+        `Resuming from checkpoint: ticket ${startIndex} ` +
         `(${processed} tickets already processed, ` +
         `${totalEmails} emails, ${totalConversations} convos)\n`,
       );
@@ -168,16 +180,17 @@ async function main() {
     `\nProcessing ${allTicketIds.length} tickets in ${totalChunks} chunks of ${CHUNK_SIZE} (concurrency: ${CONCURRENCY})...`,
   );
   if (resuming) {
-    console.log(`Skipping chunks 1-${startChunk} (already complete).`);
+    console.log(`Skipping the first ${startIndex} tickets (already complete).`);
   }
   console.log();
 
-  for (let chunkIdx = startChunk; chunkIdx < totalChunks; chunkIdx++) {
-    const chunkIds = allTicketIds.slice(
-      chunkIdx * CHUNK_SIZE,
-      (chunkIdx + 1) * CHUNK_SIZE,
-    );
-    const chunkNum = chunkIdx + 1;
+  for (
+    let offset = startIndex;
+    offset < allTicketIds.length;
+    offset += CHUNK_SIZE
+  ) {
+    const chunkIds = allTicketIds.slice(offset, offset + CHUNK_SIZE);
+    const chunkNum = Math.floor(offset / CHUNK_SIZE) + 1;
 
     console.log(`--- Chunk ${chunkNum}/${totalChunks} (${chunkIds.length} tickets) ---`);
 
@@ -265,7 +278,7 @@ async function main() {
     // --- Save checkpoint after each chunk ---
     const filePositions = writer.getFilePositions();
     await saveCheckpoint(OUTPUT_DIR, {
-      nextChunk: chunkIdx + 1,
+      nextTicketIndex: offset + chunkIds.length,
       year: YEAR,
       pipeline: pipeline?.id,
       filePositions,
