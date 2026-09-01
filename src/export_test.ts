@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert@^1";
+import { assertEquals, assertRejects } from "@std/assert";
 import { DumpWriter, writeAll } from "./export.ts";
 import type { TicketProperty } from "./tickets.ts";
 
