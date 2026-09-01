@@ -3,14 +3,15 @@ import {
   fetchIdsForDateRange,
   fetchTicketIdsByPipeline,
   fetchTicketIdsByYear,
+  filterStagePropertiesForPipeline,
   resolvePipeline,
   type TicketPipeline,
 } from "./tickets.ts";
-import { ticketIdsCachePath } from "./checkpoint.ts";
+import { propertiesCachePath, ticketIdsCachePath } from "./checkpoint.ts";
 
 const PIPELINES: TicketPipeline[] = [
-  { id: "0", label: "Support Pipeline" },
-  { id: "12345678", label: "Escalations" },
+  { id: "0", label: "Support Pipeline", stageIds: ["1", "2"] },
+  { id: "12345678", label: "Escalations", stageIds: ["3"] },
 ];
 
 // --- pipeline resolution ---------------------------------------------------
@@ -171,4 +172,78 @@ Deno.test("resolvePipeline rejects when the portal has no pipelines", () => {
   let threw = false;
   try { resolvePipeline("anything", []); } catch { threw = true; }
   assertEquals(threw, true);
+});
+
+// --- stage property filtering ----------------------------------------------
+
+const SUPPORT: TicketPipeline = { id: "0", label: "Support", stageIds: ["1", "2", "1358949122"] };
+const DESIGN: TicketPipeline = { id: "22278748", label: "Design", stageIds: ["99001", "99002"] };
+const ALL = [SUPPORT, DESIGN];
+
+function props(...names: string[]) {
+  return names.map((n) => ({ name: n, label: n }));
+}
+
+Deno.test("stage properties of other pipelines are dropped", () => {
+  const kept = filterStagePropertiesForPipeline(
+    props(
+      "hs_v2_date_entered_1",           // ours
+      "hs_v2_cumulative_time_in_2",     // ours
+      "hs_v2_date_exited_99001",        // Design
+      "hs_v2_latest_time_in_99002",     // Design
+    ),
+    SUPPORT,
+    ALL,
+  ).map((p) => p.name);
+  assertEquals(kept, ["hs_v2_date_entered_1", "hs_v2_cumulative_time_in_2"]);
+});
+
+Deno.test("long numeric stage ids are handled like short ones", () => {
+  const kept = filterStagePropertiesForPipeline(
+    props("hs_v2_date_entered_1358949122", "hs_v2_date_entered_99001"),
+    SUPPORT,
+    ALL,
+  ).map((p) => p.name);
+  assertEquals(kept, ["hs_v2_date_entered_1358949122"]);
+});
+
+Deno.test("non-stage properties are never dropped", () => {
+  const names = [
+    "subject",
+    "hs_pipeline",
+    "hs_v2_date_entered_current_stage",   // no stage id suffix
+    "custom_field_99001",                 // stage-id suffix but not hs_
+    "hs_something_404",                   // hs_ but 404 is not a known stage
+  ];
+  const kept = filterStagePropertiesForPipeline(props(...names), SUPPORT, ALL)
+    .map((p) => p.name);
+  assertEquals(kept, names);
+});
+
+Deno.test("filtering is a no-op when the pipeline owns every stage", () => {
+  const only = [SUPPORT];
+  const names = ["hs_v2_date_entered_1", "hs_v2_date_entered_2", "subject"];
+  assertEquals(
+    filterStagePropertiesForPipeline(props(...names), SUPPORT, only).map((p) => p.name),
+    names,
+  );
+});
+
+Deno.test("a pipeline with no stages still keeps non-stage properties", () => {
+  const empty: TicketPipeline = { id: "x", label: "Empty", stageIds: [] };
+  const kept = filterStagePropertiesForPipeline(
+    props("subject", "hs_v2_date_entered_1"),
+    empty,
+    [...ALL, empty],
+  ).map((p) => p.name);
+  assertEquals(kept, ["subject"]);
+});
+
+Deno.test("property cache path is keyed by pipeline", () => {
+  assertEquals(propertiesCachePath("/o"), "/o/properties.json");
+  assertEquals(propertiesCachePath("/o", "0"), "/o/properties_p0.json");
+  assertEquals(
+    propertiesCachePath("/o", "0") === propertiesCachePath("/o"),
+    false,
+  );
 });
