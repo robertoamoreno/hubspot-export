@@ -1,8 +1,19 @@
 import type { TicketProperty } from "./tickets.ts";
 
 export interface CheckpointData {
-  /** Next chunk index to process (0-based). All chunks before this are complete. */
-  nextChunk: number;
+  /**
+   * Index into the ticket id list of the first ticket not yet processed.
+   * Everything before this is written to the output files.
+   *
+   * This is an absolute ticket offset, not a chunk number, so CHUNK_SIZE can
+   * change between runs without shifting where the resume lands.
+   */
+  nextTicketIndex?: number;
+  /**
+   * Legacy chunk index from before nextTicketIndex existed. Only meaningful
+   * alongside the CHUNK_SIZE the run used, which was never recorded.
+   */
+  nextChunk?: number;
   /** Year filter used for this run (undefined = all tickets). */
   year?: number;
   /** Pipeline id filter used for this run (undefined = all pipelines). */
@@ -37,13 +48,14 @@ export interface CheckpointData {
  * dump.jsonl legitimately stays at 0 if no ticket has been written yet.
  */
 export function hasValidFilePositions(cp: CheckpointData): boolean {
+  const claimsProgress = (cp.nextTicketIndex ?? cp.nextChunk ?? 0) > 0;
   const p = cp.filePositions;
   if (!p) return false;
   const values = [p.ticketsCsv, p.messagesCsv, p.dumpJsonl];
   if (values.some((v) => typeof v !== "number" || !Number.isFinite(v) || v < 0)) {
     return false;
   }
-  if (cp.nextChunk > 0 && (p.ticketsCsv === 0 || p.messagesCsv === 0)) {
+  if (claimsProgress && (p.ticketsCsv === 0 || p.messagesCsv === 0)) {
     return false;
   }
   return true;
