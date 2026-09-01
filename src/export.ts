@@ -61,6 +61,28 @@ export async function writeAll(
   return offset;
 }
 
+/** Columns appended after the ticket properties. */
+const EXTRA_TICKET_COLUMNS = ["Message Count", "URL"];
+
+/**
+ * Build the tickets.csv header row.
+ *
+ * HubSpot lets two properties carry the same display label, and a label can
+ * also collide with one of the appended columns. Internal property names are
+ * unique, so only the colliding labels get their name appended — every other
+ * header keeps its plain label, so existing consumers are unaffected.
+ */
+export function buildTicketHeaders(properties: TicketProperty[]): string[] {
+  const counts = new Map<string, number>();
+  for (const c of EXTRA_TICKET_COLUMNS) counts.set(c, 1);
+  for (const p of properties) counts.set(p.label, (counts.get(p.label) ?? 0) + 1);
+
+  const headers = properties.map((p) =>
+    (counts.get(p.label) ?? 0) > 1 ? `${p.label} (${p.name})` : p.label
+  );
+  return [...headers, ...EXTRA_TICKET_COLUMNS];
+}
+
 export interface FilePositions {
   ticketsCsv: number;
   messagesCsv: number;
@@ -187,12 +209,9 @@ export class DumpWriter {
       { ticketsCsv: 0, messagesCsv: 0, dumpJsonl: 0 },
     );
 
-    // Build ticket CSV header from property labels + extras
-    const headers = properties.map((p) => p.label);
-    headers.push("Message Count", "URL");
     await writer.writeLine(
       ticketsFile,
-      headers.map(csvEscape).join(","),
+      buildTicketHeaders(properties).map(csvEscape).join(","),
       "ticketsCsv",
     );
 
