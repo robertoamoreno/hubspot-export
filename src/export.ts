@@ -24,7 +24,7 @@ const MESSAGES_CSV_HEADER = [
 ].join(",");
 
 /** Escape a value for CSV (RFC 4180). */
-function csvEscape(value: string): string {
+export function csvEscape(value: string): string {
   if (
     value.includes(",") ||
     value.includes('"') ||
