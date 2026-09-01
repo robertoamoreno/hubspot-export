@@ -12,6 +12,7 @@ import { parallelStream } from "./hubspot.ts";
 
 const SKIP_CONVERSATIONS = (Deno.env.get("SKIP_CONVERSATIONS") || "").toLowerCase() === "true";
 import {
+  hasValidFilePositions,
   loadCheckpoint,
   saveCheckpoint,
   clearCheckpoint,
@@ -68,6 +69,14 @@ async function main() {
       console.log(
         `Checkpoint was for year=${checkpoint.year ?? "all"} but current YEAR=${YEAR ?? "all"}. ` +
         `Ignoring checkpoint and starting fresh.\n`,
+      );
+      await clearCheckpoint(OUTPUT_DIR);
+    } else if (!hasValidFilePositions(checkpoint)) {
+      console.warn(
+        `Checkpoint has unusable file positions ` +
+        `(${JSON.stringify(checkpoint.filePositions)}) — it was written by an ` +
+        `older version that misread them. Resuming would truncate the output ` +
+        `files, so starting fresh instead.\n`,
       );
       await clearCheckpoint(OUTPUT_DIR);
     } else {
@@ -203,7 +212,7 @@ async function main() {
     );
 
     // --- Save checkpoint after each chunk ---
-    const filePositions = await writer.getFilePositions();
+    const filePositions = writer.getFilePositions();
     await saveCheckpoint(OUTPUT_DIR, {
       nextChunk: chunkIdx + 1,
       year: YEAR,
