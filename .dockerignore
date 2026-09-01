@@ -5,3 +5,4 @@ output/
 docs/
 node_modules/
 *.md
+src/*_test.ts
