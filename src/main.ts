@@ -17,12 +17,15 @@ import {
 } from "./emails.ts";
 import { fetchConversationsForTicket } from "./conversations.ts";
 import { dedupeMessages } from "./dedupe.ts";
+import { dropEmptyColumns } from "./compact.ts";
 import { DumpWriter } from "./export.ts";
 import type { Message, TicketDump } from "./export.ts";
 import { parallelStream } from "./hubspot.ts";
 
 const SKIP_CONVERSATIONS = (Deno.env.get("SKIP_CONVERSATIONS") || "").toLowerCase() === "true";
 const SKIP_DEDUPE = (Deno.env.get("SKIP_DEDUPE") || "").toLowerCase() === "true";
+const DROP_EMPTY_COLUMNS =
+  (Deno.env.get("DROP_EMPTY_COLUMNS") || "").toLowerCase() === "true";
 import {
   hasValidFilePositions,
   loadCheckpoint,
@@ -333,6 +336,19 @@ async function main() {
 
   // All done — clear checkpoint (keep cache files for potential future runs)
   await clearCheckpoint(OUTPUT_DIR);
+
+  // Compaction rewrites tickets.csv, invalidating the byte offsets a resume
+  // relies on, so it only runs once the checkpoint is gone.
+  if (DROP_EMPTY_COLUMNS) {
+    console.log("\nDropping empty ticket columns...");
+    const { before, after, rows } = await dropEmptyColumns(
+      `${OUTPUT_DIR}/tickets.csv`,
+    );
+    console.log(
+      `  tickets.csv: ${before} -> ${after} columns ` +
+      `(${before - after} empty across all ${rows} tickets)`,
+    );
+  }
 
   console.log("\n=== Dump Complete ===");
   console.log(`Tickets:      ${processed}`);
