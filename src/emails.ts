@@ -23,6 +23,8 @@ export interface EmailMessage {
   recipient: string;
   timestamp: string;
   sourceType: "EMAIL";
+  /** Set when a duplicate conversation copy was merged in. See dedupeMessages. */
+  threadId?: string;
 }
 
 export interface AssociationFetchResult {

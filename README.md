@@ -119,6 +119,21 @@ docker run --env-file .env -e SKIP_CONVERSATIONS=true -v "$(pwd)/output:/app/out
 
 Conversation threads (live chat, chatbot, Messenger) are the most API-intensive part of the export since HubSpot has no batch endpoint for them. Email data already captures most support interactions (incoming/outgoing emails with full content, sender, recipient, and timestamps).
 
+### Duplicate messages
+
+When a connected inbox backs a conversation thread, HubSpot returns the same
+message twice — once as an email engagement and once as a thread message, with
+different ids. Both are fetched, then collapsed into a single row: the email
+copy is kept (it has a stable CRM object id) and the thread id from the
+conversation copy is carried onto it.
+
+Two messages are treated as the same when their bodies match ignoring case and
+whitespace *and* their timestamps are within 60 seconds, so a genuinely
+repeated reply stays a separate row. The count is reported as
+`Duplicates removed` at the end of the run.
+
+To keep both copies, set `SKIP_DEDUPE=true`.
+
 ### Resuming an interrupted export
 
 If the export is stopped or crashes, just run the same command again. It will automatically:
@@ -294,6 +309,7 @@ Check the terminal output for errors. Common causes:
 | `PIPELINE` | No | — | Filter to one ticket pipeline, by name or id (e.g. `"Support Pipeline"` or `0`). Case-insensitive; an unknown value lists the valid pipelines and exits |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
 | `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |
+| `SKIP_DEDUPE` | No | `false` | Set to `true` to keep both copies of a message that HubSpot returns as both an email and a conversation message |
 
 ## Development
 
