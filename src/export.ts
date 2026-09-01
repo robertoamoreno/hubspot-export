@@ -225,7 +225,7 @@ export class DumpWriter {
 
     // Write message CSV rows
     for (const msg of messages) {
-      const threadId = "threadId" in msg ? msg.threadId : "";
+      const threadId = ("threadId" in msg ? msg.threadId : "") ?? "";
       const msgRow = [
         ticket.id,
         msg.id,

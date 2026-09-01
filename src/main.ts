@@ -15,11 +15,13 @@ import {
   getEmailsForTicket,
 } from "./emails.ts";
 import { fetchConversationsForTicket } from "./conversations.ts";
+import { dedupeMessages } from "./dedupe.ts";
 import { DumpWriter } from "./export.ts";
 import type { Message, TicketDump } from "./export.ts";
 import { parallelStream } from "./hubspot.ts";
 
 const SKIP_CONVERSATIONS = (Deno.env.get("SKIP_CONVERSATIONS") || "").toLowerCase() === "true";
+const SKIP_DEDUPE = (Deno.env.get("SKIP_DEDUPE") || "").toLowerCase() === "true";
 import {
   hasValidFilePositions,
   loadCheckpoint,
@@ -62,6 +64,9 @@ async function main() {
   if (SKIP_CONVERSATIONS) {
     console.log("SKIP_CONVERSATIONS=true — fetching emails only (no conversation threads)\n");
   }
+  if (SKIP_DEDUPE) {
+    console.log("SKIP_DEDUPE=true — keeping duplicate email/conversation copies\n");
+  }
 
   await Deno.mkdir(OUTPUT_DIR, { recursive: true });
 
@@ -82,6 +87,7 @@ async function main() {
   let totalConversations = 0;
   let errors = 0;
   let incompleteTickets = 0;
+  let duplicatesRemoved = 0;
 
   if (checkpoint) {
     if (checkpoint.year !== YEAR || checkpoint.pipeline !== pipeline?.id) {
@@ -120,6 +126,7 @@ async function main() {
       totalConversations = checkpoint.stats.totalConversations;
       errors = checkpoint.stats.errors;
       incompleteTickets = checkpoint.stats.incompleteTickets ?? 0;
+      duplicatesRemoved = checkpoint.stats.duplicatesRemoved ?? 0;
       console.log(
         `Resuming from checkpoint: ticket ${startIndex} ` +
         `(${processed} tickets already processed, ` +
@@ -252,6 +259,13 @@ async function main() {
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
 
+        let finalMessages = messages;
+        if (!SKIP_DEDUPE) {
+          const deduped = dedupeMessages(messages);
+          finalMessages = deduped.messages;
+          duplicatesRemoved += deduped.removed;
+        }
+
         processed++;
         if (processed % 200 === 0 || processed === allTicketIds.length) {
           const elapsed = (Date.now() - startTime) / 1000;
@@ -268,7 +282,7 @@ async function main() {
           );
         }
 
-        return { ticket, messages };
+        return { ticket, messages: finalMessages };
       },
       async (dump) => {
         await writer.writeTicket(dump);
@@ -288,6 +302,7 @@ async function main() {
         totalConversations,
         errors,
         incompleteTickets,
+        duplicatesRemoved,
       },
     });
     console.log(`  [Checkpoint saved: ${processed} tickets complete]\n`);
@@ -306,6 +321,9 @@ async function main() {
   console.log(`Messages:     ${stats.messages}`);
   console.log(`  Emails:     ${totalEmails}`);
   console.log(`  Conversations: ${totalConversations}`);
+  if (duplicatesRemoved > 0) {
+    console.log(`  Duplicates removed: ${duplicatesRemoved}`);
+  }
   console.log(`Errors:       ${errors}`);
   if (incompleteTickets > 0) {
     console.log(`Incomplete:   ${incompleteTickets} tickets missing some email data`);
