@@ -141,6 +141,25 @@ repeated reply stays a separate row. The count is reported as
 
 To keep both copies, set `SKIP_DEDUPE=true`.
 
+### Dropping empty ticket columns
+
+`tickets.csv` has one column per ticket property defined in your account, and
+most accounts define far more than any one export uses — a production run of
+7,687 tickets filled only 269 of 1,462 columns.
+
+```bash
+docker run --env-file .env -e DROP_EMPTY_COLUMNS=true -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
+```
+
+After the export finishes, columns that are empty in *every* row are removed.
+It runs over the completed file rather than a sample, because more tickets
+surface more used properties — the same export filled 136 columns at 81
+tickets and 269 at 7,687. On that run it took under two seconds and cut
+`tickets.csv` from 27.9 MB to 18.7 MB.
+
+This only runs once the export is complete, since rewriting `tickets.csv`
+invalidates the byte offsets a resume depends on.
+
 ### Resuming an interrupted export
 
 If the export is stopped or crashes, just run the same command again. It will automatically:
@@ -317,6 +336,7 @@ Check the terminal output for errors. Common causes:
 | `PIPELINE` | No | — | Filter to one ticket pipeline, by name or id (e.g. `"Support Pipeline"` or `0`). Case-insensitive; an unknown value lists the valid pipelines and exits |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
 | `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |
+| `DROP_EMPTY_COLUMNS` | No | `false` | Set to `true` to remove ticket columns that are empty across the whole export, as a post-pass |
 | `SKIP_DEDUPE` | No | `false` | Set to `true` to keep both copies of a message that HubSpot returns as both an email and a conversation message |
 
 ## Development
