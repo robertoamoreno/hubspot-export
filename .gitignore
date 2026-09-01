@@ -3,3 +3,6 @@
 output*/
 node_modules/
 .claude/worktrees
+*.zip
+*.tar.gz
+output-sample*/
