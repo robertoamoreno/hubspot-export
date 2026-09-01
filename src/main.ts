@@ -1,5 +1,14 @@
 import "@std/dotenv/load";
-import { fetchTicketProperties, fetchAllTicketIds, fetchTicketIdsByYear, fetchTicketsBatch } from "./tickets.ts";
+import {
+  fetchAllTicketIds,
+  fetchTicketIdsByPipeline,
+  fetchTicketIdsByYear,
+  fetchTicketPipelines,
+  fetchTicketProperties,
+  fetchTicketsBatch,
+  resolvePipeline,
+} from "./tickets.ts";
+import type { TicketPipeline } from "./tickets.ts";
 import {
   batchGetEmailAssociations,
   batchFetchEmails,
@@ -37,6 +46,7 @@ const CHUNK_SIZE = (() => {
   }
   return val;
 })();
+const PIPELINE = Deno.env.get("PIPELINE")?.trim() || undefined;
 const YEAR: number | undefined = (() => {
   const val = Deno.env.get("YEAR");
   if (!val) return undefined;
@@ -55,6 +65,14 @@ async function main() {
 
   await Deno.mkdir(OUTPUT_DIR, { recursive: true });
 
+  // --- Resolve the pipeline filter first: it is part of the checkpoint and
+  // cache identity, and a typo should fail before any bulk work starts ---
+  let pipeline: TicketPipeline | undefined;
+  if (PIPELINE) {
+    pipeline = resolvePipeline(PIPELINE, await fetchTicketPipelines());
+    console.log(`Filtering tickets to pipeline: ${pipeline.label} (${pipeline.id})\n`);
+  }
+
   // --- Check for existing checkpoint ---
   const checkpoint = await loadCheckpoint(OUTPUT_DIR);
   let resuming = false;
@@ -66,9 +84,11 @@ async function main() {
   let incompleteTickets = 0;
 
   if (checkpoint) {
-    if (checkpoint.year !== YEAR) {
+    if (checkpoint.year !== YEAR || checkpoint.pipeline !== pipeline?.id) {
       console.log(
-        `Checkpoint was for year=${checkpoint.year ?? "all"} but current YEAR=${YEAR ?? "all"}. ` +
+        `Checkpoint was for year=${checkpoint.year ?? "all"}, ` +
+        `pipeline=${checkpoint.pipeline ?? "all"} but current ` +
+        `YEAR=${YEAR ?? "all"}, PIPELINE=${pipeline?.id ?? "all"}. ` +
         `Ignoring checkpoint and starting fresh.\n`,
       );
       await clearCheckpoint(OUTPUT_DIR);
@@ -111,18 +131,26 @@ async function main() {
   const propertyNames = properties.map((p) => p.name);
 
   // --- Load or fetch ticket IDs (always try cache first) ---
-  let allTicketIds = await loadTicketIds(OUTPUT_DIR, YEAR);
+  let allTicketIds = await loadTicketIds(OUTPUT_DIR, YEAR, pipeline?.id);
   if (!allTicketIds) {
-    allTicketIds = YEAR
-      ? await fetchTicketIdsByYear(YEAR)
-      : await fetchAllTicketIds();
-    await saveTicketIds(OUTPUT_DIR, allTicketIds, YEAR);
+    if (YEAR) {
+      allTicketIds = await fetchTicketIdsByYear(YEAR, pipeline?.id);
+    } else if (pipeline) {
+      allTicketIds = await fetchTicketIdsByPipeline(pipeline.id);
+    } else {
+      allTicketIds = await fetchAllTicketIds();
+    }
+    await saveTicketIds(OUTPUT_DIR, allTicketIds, YEAR, pipeline?.id);
   } else {
     console.log(`Loaded ${allTicketIds.length} ticket IDs from cache.`);
   }
 
   if (allTicketIds.length === 0) {
-    console.log("No tickets found. Check your access token and scopes.");
+    console.log(
+      pipeline
+        ? `No tickets found in pipeline "${pipeline.label}"${YEAR ? ` for ${YEAR}` : ""}.`
+        : "No tickets found. Check your access token and scopes.",
+    );
     return;
   }
 
@@ -239,6 +267,7 @@ async function main() {
     await saveCheckpoint(OUTPUT_DIR, {
       nextChunk: chunkIdx + 1,
       year: YEAR,
+      pipeline: pipeline?.id,
       filePositions,
       stats: {
         processed,

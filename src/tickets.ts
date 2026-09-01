@@ -5,6 +5,11 @@ export interface TicketProperty {
   label: string;
 }
 
+export interface TicketPipeline {
+  id: string;
+  label: string;
+}
+
 export interface Ticket {
   id: string;
   properties: Record<string, string | null>;
@@ -22,6 +27,38 @@ export async function fetchTicketProperties(): Promise<TicketProperty[]> {
   return props;
 }
 
+interface PipelinesResponse {
+  results: Array<{ id: string; label: string }>;
+}
+
+/** Fetch the ticket pipelines defined in the portal. */
+export async function fetchTicketPipelines(): Promise<TicketPipeline[]> {
+  const data = await hubspotFetch<PipelinesResponse>("/crm/v3/pipelines/tickets");
+  return data.results.map((p) => ({ id: p.id, label: p.label }));
+}
+
+/**
+ * Resolve a user-supplied pipeline (id or label, case-insensitive) against the
+ * portal's pipelines. Throws listing the valid options rather than letting a
+ * typo quietly export zero tickets.
+ */
+export function resolvePipeline(
+  input: string,
+  pipelines: TicketPipeline[],
+): TicketPipeline {
+  const needle = input.trim().toLowerCase();
+  const match = pipelines.find(
+    (p) => p.id.toLowerCase() === needle || p.label.toLowerCase() === needle,
+  );
+  if (!match) {
+    throw new Error(
+      `Unknown pipeline "${input}". Available ticket pipelines:\n` +
+        pipelines.map((p) => `  ${p.id}\t${p.label}`).join("\n"),
+    );
+  }
+  return match;
+}
+
 interface ListResponse {
   results: Array<{ id: string }>;
   paging?: { next?: { after: string } };
@@ -37,24 +74,46 @@ interface SearchResponse {
   total: number;
 }
 
+/** Search filters for a createdate window, optionally narrowed to one pipeline. */
+function searchFilters(
+  fromMs: number,
+  toMs: number,
+  pipelineId?: string,
+): Array<Record<string, string>> {
+  // Filters within one filterGroup are ANDed by the Search API.
+  const filters = [
+    { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
+    { propertyName: "createdate", operator: "LT", value: String(toMs) },
+  ];
+  if (pipelineId) {
+    filters.push({
+      propertyName: "hs_pipeline",
+      operator: "EQ",
+      value: pipelineId,
+    });
+  }
+  return filters;
+}
+
+/** Stop halving a date range once it is this small (see fetchIdsForDateRange). */
+const MIN_SPLIT_RANGE_MS = 1000;
+
 /**
  * Fetch ticket IDs within a date range using the Search API.
  * If the range contains >10k results (HubSpot's search limit),
  * it automatically splits the range in half and recurses.
+ *
+ * Exported for tests.
  */
-async function fetchIdsForDateRange(
+export async function fetchIdsForDateRange(
   fromMs: number,
   toMs: number,
   label: string,
+  pipelineId?: string,
 ): Promise<string[]> {
   // Probe the total count first
   const probeBody = {
-    filterGroups: [{
-      filters: [
-        { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
-        { propertyName: "createdate", operator: "LT", value: String(toMs) },
-      ],
-    }],
+    filterGroups: [{ filters: searchFilters(fromMs, toMs, pipelineId) }],
     sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
     properties: ["hs_object_id"],
     limit: 1,
@@ -69,13 +128,22 @@ async function fetchIdsForDateRange(
 
   if (probe.total === 0) return [];
 
-  // If >10k, split the range in half and recurse
+  // If >10k, split the range in half and recurse.
+  // Halving a 1ms range yields midMs === fromMs, so the second recursive call
+  // would repeat the parent range forever; stop splitting before that point.
   if (probe.total > 10000) {
-    const midMs = fromMs + Math.floor((toMs - fromMs) / 2);
-    const fmtDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-    const firstHalf = await fetchIdsForDateRange(fromMs, midMs, `${fmtDate(fromMs)}..${fmtDate(midMs)}`);
-    const secondHalf = await fetchIdsForDateRange(midMs, toMs, `${fmtDate(midMs)}..${fmtDate(toMs)}`);
-    return firstHalf.concat(secondHalf);
+    if (toMs - fromMs > MIN_SPLIT_RANGE_MS) {
+      const midMs = fromMs + Math.floor((toMs - fromMs) / 2);
+      const fmtDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+      const firstHalf = await fetchIdsForDateRange(fromMs, midMs, `${fmtDate(fromMs)}..${fmtDate(midMs)}`, pipelineId);
+      const secondHalf = await fetchIdsForDateRange(midMs, toMs, `${fmtDate(midMs)}..${fmtDate(toMs)}`, pipelineId);
+      return firstHalf.concat(secondHalf);
+    }
+    console.warn(
+      `  WARNING: ${label} holds ${probe.total} tickets within ${toMs - fromMs}ms, ` +
+        `past the search API's 10,000 result cap. Some ticket ids in this ` +
+        `range will be missing from the export.`,
+    );
   }
 
   // <=10k results, safe to paginate fully
@@ -84,12 +152,7 @@ async function fetchIdsForDateRange(
 
   do {
     const body: Record<string, unknown> = {
-      filterGroups: [{
-        filters: [
-          { propertyName: "createdate", operator: "GTE", value: String(fromMs) },
-          { propertyName: "createdate", operator: "LT", value: String(toMs) },
-        ],
-      }],
+      filterGroups: [{ filters: searchFilters(fromMs, toMs, pipelineId) }],
       sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
       properties: ["hs_object_id"],
       limit: 100,
@@ -123,7 +186,10 @@ const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
  * tickets into smaller date ranges to stay under HubSpot's search limit.
  * Skips future months that haven't occurred yet.
  */
-export async function fetchTicketIdsByYear(year: number): Promise<string[]> {
+export async function fetchTicketIdsByYear(
+  year: number,
+  pipelineId?: string,
+): Promise<string[]> {
   const allIds: string[] = [];
   console.log(`Fetching ticket IDs for year ${year}...`);
   const startTime = Date.now();
@@ -134,13 +200,39 @@ export async function fetchTicketIdsByYear(year: number): Promise<string[]> {
     // Skip months that haven't started yet
     if (fromMs > nowMs) break;
     const toMs = Math.min(Date.UTC(year, month + 1, 1), nowMs);
-    const ids = await fetchIdsForDateRange(fromMs, toMs, `${MONTH_NAMES[month]} ${year}`);
+    const ids = await fetchIdsForDateRange(fromMs, toMs, `${MONTH_NAMES[month]} ${year}`, pipelineId);
     allIds.push(...ids);
   }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`Fetched ${allIds.length} ticket IDs for ${year} in ${totalTime}s.`);
   return allIds;
+}
+
+/** Earliest createdate the export will look back to when no YEAR is set. */
+const EPOCH_MS = Date.UTC(2000, 0, 1);
+
+/**
+ * Fetch ticket IDs for one pipeline across all time.
+ *
+ * The plain list endpoint cannot filter, so this goes through the Search API
+ * over an open date range. The 10,000-result cap is handled by the same
+ * halving recursion the YEAR filter uses.
+ */
+export async function fetchTicketIdsByPipeline(
+  pipelineId: string,
+): Promise<string[]> {
+  console.log(`Fetching ticket IDs for pipeline ${pipelineId}...`);
+  const startTime = Date.now();
+  const ids = await fetchIdsForDateRange(
+    EPOCH_MS,
+    Date.now(),
+    "all time",
+    pipelineId,
+  );
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`Fetched ${ids.length} ticket IDs in ${totalTime}s.`);
+  return ids;
 }
 
 /**

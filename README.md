@@ -88,6 +88,27 @@ docker run --env-file .env -e YEAR=2025 -v "$(pwd)/output:/app/output" tempestdx
 
 This uses the HubSpot Search API to only fetch tickets created in the specified year. Only months up to the current date are queried (future months are skipped). Date ranges with more than 10,000 tickets are automatically split into smaller ranges to stay within HubSpot's search API limits.
 
+### Exporting a specific pipeline
+
+To export only the tickets in one pipeline, pass its name or its id:
+
+```bash
+docker run --env-file .env -e PIPELINE="Support Pipeline" -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
+```
+
+Matching is case-insensitive, and an unrecognised value fails immediately with
+a list of the pipelines in your account — so a typo can't quietly export zero
+tickets. Combine it with `YEAR` to narrow further:
+
+```bash
+docker run --env-file .env -e PIPELINE=0 -e YEAR=2025 -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
+```
+
+Pipeline-filtered runs go through the Search API (the plain list endpoint
+can't filter), splitting large date ranges the same way the `YEAR` filter does.
+Cached ticket ids are stored per filter combination, so a pipeline run never
+reuses a whole-account cache.
+
 ### Skipping conversations (emails only)
 
 If you only need email data and want to dramatically reduce API usage (~3,300 calls instead of ~242,000 for 90k tickets):
@@ -185,6 +206,7 @@ The `output/` folder also contains files used for caching and resume:
 |------|---------|
 | `ticket_ids.json` | Cached ticket IDs (avoids re-fetching on resume) |
 | `ticket_ids_2025.json` | Cached ticket IDs for year-filtered runs |
+| `ticket_ids_p0_2025.json` | Cached ticket IDs per pipeline (`p<id>`) and year |
 | `properties.json` | Cached property definitions |
 | `checkpoint.json` | Current progress (deleted on successful completion) |
 
@@ -268,6 +290,7 @@ Check the terminal output for errors. Common causes:
 | `OUTPUT_DIR` | No | `./output` | Where to save the dump files |
 | `CONCURRENCY` | No | `10` | Number of parallel conversation fetches. Lower if you hit rate limits |
 | `CHUNK_SIZE` | No | `5000` | Number of tickets per processing chunk. Lower to reduce memory usage |
+| `PIPELINE` | No | — | Filter to one ticket pipeline, by name or id (e.g. `"Support Pipeline"` or `0`). Case-insensitive; an unknown value lists the valid pipelines and exits |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
 | `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |
 
