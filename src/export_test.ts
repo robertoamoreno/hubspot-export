@@ -247,15 +247,15 @@ Deno.test("distinct labels are left exactly as they are", () => {
 });
 
 Deno.test("two properties sharing a label are disambiguated by internal name", () => {
-  // Real collision from a production portal.
+  // Shape of a real collision: two properties, one label.
   const h = buildTicketHeaders([
-    { name: "onb_pth_team_questionnaire_complete", label: "Team Questionnaire Completed" },
-    { name: "team_questionnaire_completed", label: "Team Questionnaire Completed" },
+    { name: "onboarding_survey_done", label: "Survey Completed" },
+    { name: "survey_completed", label: "Survey Completed" },
     { name: "subject", label: "Ticket name" },
   ]);
   assertEquals(h, [
-    "Team Questionnaire Completed (onb_pth_team_questionnaire_complete)",
-    "Team Questionnaire Completed (team_questionnaire_completed)",
+    "Survey Completed (onboarding_survey_done)",
+    "Survey Completed (survey_completed)",
     "Ticket name",
     "Message Count",
     "URL",
