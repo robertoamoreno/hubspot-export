@@ -142,13 +142,27 @@ export async function loadTicketIds(
   }
 }
 
+/**
+ * Cache path for the property list. Keyed by pipeline because the exported
+ * column set is pipeline-dependent once stage properties are filtered.
+ */
+export function propertiesCachePath(
+  outputDir: string,
+  pipelineId?: string,
+): string {
+  return pipelineId
+    ? `${outputDir}/properties_p${pipelineId.replace(/[^a-zA-Z0-9]+/g, "-")}.json`
+    : `${outputDir}/properties.json`;
+}
+
 /** Cache property definitions to disk. */
 export async function saveProperties(
   outputDir: string,
   properties: TicketProperty[],
+  pipelineId?: string,
 ): Promise<void> {
   await Deno.writeTextFile(
-    `${outputDir}/properties.json`,
+    propertiesCachePath(outputDir, pipelineId),
     JSON.stringify(properties),
   );
 }
@@ -156,9 +170,12 @@ export async function saveProperties(
 /** Load cached property definitions, or return null if not cached. */
 export async function loadProperties(
   outputDir: string,
+  pipelineId?: string,
 ): Promise<TicketProperty[] | null> {
   try {
-    const text = await Deno.readTextFile(`${outputDir}/properties.json`);
+    const text = await Deno.readTextFile(
+      propertiesCachePath(outputDir, pipelineId),
+    );
     return JSON.parse(text) as TicketProperty[];
   } catch (err) {
     if (err instanceof Deno.errors.NotFound) return null;
