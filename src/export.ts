@@ -35,6 +35,31 @@ function csvEscape(value: string): string {
   return value;
 }
 
+/**
+ * Write a buffer in full, looping until every byte lands.
+ *
+ * `Deno.FsFile.write()` is not guaranteed to consume the whole buffer — it
+ * returns the number of bytes actually written. Ignoring that return value
+ * silently truncates long rows (a single email body can span megabytes) and
+ * corrupts every byte offset after it. Returns the total bytes written.
+ */
+export async function writeAll(
+  file: Pick<Deno.FsFile, "write">,
+  bytes: Uint8Array,
+): Promise<number> {
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const n = await file.write(bytes.subarray(offset));
+    if (n <= 0) {
+      throw new Error(
+        `Short write: wrote ${n} of ${bytes.byteLength - offset} remaining bytes`,
+      );
+    }
+    offset += n;
+  }
+  return offset;
+}
+
 export interface FilePositions {
   ticketsCsv: number;
   messagesCsv: number;
@@ -135,8 +160,8 @@ export class DumpWriter {
     return writer;
   }
 
-  private async writeLine(file: Deno.FsFile, line: string): Promise<void> {
-    await file.write(this.encoder.encode(line + "\n"));
+  private async writeLine(file: Deno.FsFile, line: string): Promise<number> {
+    return await writeAll(file, this.encoder.encode(line + "\n"));
   }
 
   async writeTicket(dump: TicketDump): Promise<void> {
