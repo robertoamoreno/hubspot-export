@@ -5,6 +5,8 @@ export interface CheckpointData {
   nextChunk: number;
   /** Year filter used for this run (undefined = all tickets). */
   year?: number;
+  /** Pipeline id filter used for this run (undefined = all pipelines). */
+  pipeline?: string;
   /** Byte positions of output files at the end of the last completed chunk. */
   filePositions: {
     ticketsCsv: number;
@@ -80,10 +82,20 @@ export async function clearCheckpoint(outputDir: string): Promise<void> {
   }
 }
 
-function ticketIdsCachePath(outputDir: string, year?: number): string {
-  return year
-    ? `${outputDir}/ticket_ids_${year}.json`
-    : `${outputDir}/ticket_ids.json`;
+/**
+ * Cache filename for one filter combination. The pipeline and year are part of
+ * the name so a filtered run can never reuse a cache built for a different
+ * filter (or for the whole account).
+ */
+export function ticketIdsCachePath(
+  outputDir: string,
+  year?: number,
+  pipelineId?: string,
+): string {
+  const parts = ["ticket_ids"];
+  if (pipelineId) parts.push(`p${pipelineId.replace(/[^a-zA-Z0-9]+/g, "-")}`);
+  if (year) parts.push(String(year));
+  return `${outputDir}/${parts.join("_")}.json`;
 }
 
 /** Cache ticket IDs to disk so we never re-fetch on resume. */
@@ -91,9 +103,10 @@ export async function saveTicketIds(
   outputDir: string,
   ids: string[],
   year?: number,
+  pipelineId?: string,
 ): Promise<void> {
   await Deno.writeTextFile(
-    ticketIdsCachePath(outputDir, year),
+    ticketIdsCachePath(outputDir, year, pipelineId),
     JSON.stringify(ids),
   );
 }
@@ -102,9 +115,12 @@ export async function saveTicketIds(
 export async function loadTicketIds(
   outputDir: string,
   year?: number,
+  pipelineId?: string,
 ): Promise<string[] | null> {
   try {
-    const text = await Deno.readTextFile(ticketIdsCachePath(outputDir, year));
+    const text = await Deno.readTextFile(
+      ticketIdsCachePath(outputDir, year, pipelineId),
+    );
     return JSON.parse(text) as string[];
   } catch (err) {
     if (err instanceof Deno.errors.NotFound) return null;
