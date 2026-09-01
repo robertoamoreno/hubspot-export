@@ -75,6 +75,8 @@ export class DumpWriter {
   private messageCount = 0;
   private properties: TicketProperty[];
   private portalId: string;
+  /** Bytes written to each output file, tracked as we go. See getFilePositions(). */
+  private pos: FilePositions;
 
   private constructor(
     ticketsFile: Deno.FsFile,
@@ -82,12 +84,14 @@ export class DumpWriter {
     jsonlFile: Deno.FsFile,
     properties: TicketProperty[],
     portalId: string,
+    startPositions: FilePositions,
   ) {
     this.ticketsFile = ticketsFile;
     this.messagesFile = messagesFile;
     this.jsonlFile = jsonlFile;
     this.properties = properties;
     this.portalId = portalId;
+    this.pos = { ...startPositions };
   }
 
   /**
@@ -110,10 +114,27 @@ export class DumpWriter {
     await Deno.mkdir(outputDir, { recursive: true });
 
     if (resume) {
-      // Truncate files to the last known-good positions (removes partial chunk data)
-      await Deno.truncate(`${outputDir}/tickets.csv`, resume.ticketsCsv);
-      await Deno.truncate(`${outputDir}/messages.csv`, resume.messagesCsv);
-      await Deno.truncate(`${outputDir}/dump.jsonl`, resume.dumpJsonl);
+      // Truncate files to the last known-good positions (removes partial chunk data).
+      // Deno.truncate() *grows* a file with NUL bytes when the requested size
+      // exceeds the current one, so verify we are only ever shrinking.
+      const targets: Array<[string, number]> = [
+        [`${outputDir}/tickets.csv`, resume.ticketsCsv],
+        [`${outputDir}/messages.csv`, resume.messagesCsv],
+        [`${outputDir}/dump.jsonl`, resume.dumpJsonl],
+      ];
+      for (const [path, want] of targets) {
+        const { size } = await Deno.stat(path);
+        if (want > size) {
+          throw new Error(
+            `Checkpoint expects ${path} to be at least ${want} bytes but it is ` +
+              `${size}. The output files and checkpoint.json are out of sync — ` +
+              `delete checkpoint.json to restart the export.`,
+          );
+        }
+      }
+      for (const [path, want] of targets) {
+        await Deno.truncate(path, want);
+      }
 
       // Open in append mode
       const ticketsFile = await Deno.open(`${outputDir}/tickets.csv`, {
@@ -129,7 +150,14 @@ export class DumpWriter {
         append: true,
       });
 
-      return new DumpWriter(ticketsFile, messagesFile, jsonlFile, properties, portalId);
+      return new DumpWriter(
+        ticketsFile,
+        messagesFile,
+        jsonlFile,
+        properties,
+        portalId,
+        resume,
+      );
     }
 
     // Fresh start — truncate and write headers
@@ -149,19 +177,34 @@ export class DumpWriter {
       truncate: true,
     });
 
-    const writer = new DumpWriter(ticketsFile, messagesFile, jsonlFile, properties, portalId);
+    const writer = new DumpWriter(
+      ticketsFile,
+      messagesFile,
+      jsonlFile,
+      properties,
+      portalId,
+      { ticketsCsv: 0, messagesCsv: 0, dumpJsonl: 0 },
+    );
 
     // Build ticket CSV header from property labels + extras
     const headers = properties.map((p) => p.label);
     headers.push("Message Count", "URL");
-    await writer.writeLine(ticketsFile, headers.map(csvEscape).join(","));
+    await writer.writeLine(
+      ticketsFile,
+      headers.map(csvEscape).join(","),
+      "ticketsCsv",
+    );
 
-    await writer.writeLine(messagesFile, MESSAGES_CSV_HEADER);
+    await writer.writeLine(messagesFile, MESSAGES_CSV_HEADER, "messagesCsv");
     return writer;
   }
 
-  private async writeLine(file: Deno.FsFile, line: string): Promise<number> {
-    return await writeAll(file, this.encoder.encode(line + "\n"));
+  private async writeLine(
+    file: Deno.FsFile,
+    line: string,
+    key: keyof FilePositions,
+  ): Promise<void> {
+    this.pos[key] += await writeAll(file, this.encoder.encode(line + "\n"));
   }
 
   async writeTicket(dump: TicketDump): Promise<void> {
@@ -172,7 +215,11 @@ export class DumpWriter {
     const values = this.properties.map((p) => ticket.properties[p.name] ?? "");
     values.push(String(messages.length), url);
 
-    await this.writeLine(this.ticketsFile, values.map(csvEscape).join(","));
+    await this.writeLine(
+      this.ticketsFile,
+      values.map(csvEscape).join(","),
+      "ticketsCsv",
+    );
     this.ticketCount++;
 
     // Write message CSV rows
@@ -193,21 +240,25 @@ export class DumpWriter {
         .map(csvEscape)
         .join(",");
 
-      await this.writeLine(this.messagesFile, msgRow);
+      await this.writeLine(this.messagesFile, msgRow, "messagesCsv");
       this.messageCount++;
     }
 
     // Write JSONL
-    await this.writeLine(this.jsonlFile, JSON.stringify(dump));
+    await this.writeLine(this.jsonlFile, JSON.stringify(dump), "dumpJsonl");
   }
 
-  /** Get current byte positions of all output files (for checkpointing). */
-  async getFilePositions(): Promise<FilePositions> {
-    return {
-      ticketsCsv: await this.ticketsFile.seek(0, Deno.SeekMode.Current),
-      messagesCsv: await this.messagesFile.seek(0, Deno.SeekMode.Current),
-      dumpJsonl: await this.jsonlFile.seek(0, Deno.SeekMode.Current),
-    };
+  /**
+   * Byte positions of all output files, for checkpointing.
+   *
+   * These are counted as we write rather than read back off the file
+   * descriptors. Asking an append-mode fd for its offset returns 0 until the
+   * first write in the process, so a chunk that wrote no tickets used to
+   * checkpoint {0, 0, 0} — and the next resume would truncate every output
+   * file, headers included, to nothing.
+   */
+  getFilePositions(): FilePositions {
+    return { ...this.pos };
   }
 
   async close(): Promise<void> {
