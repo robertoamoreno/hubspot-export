@@ -9,7 +9,7 @@ import {
 
 function cp(partial: Partial<CheckpointData> = {}): CheckpointData {
   return {
-    nextChunk: 2,
+    nextTicketIndex: 10,
     filePositions: { ticketsCsv: 500, messagesCsv: 900, dumpJsonl: 4000 },
     stats: { processed: 10, totalEmails: 5, totalConversations: 3, errors: 0 },
     ...partial,
@@ -94,4 +94,39 @@ Deno.test("an all-tickets checkpoint round-trips year as undefined", () => {
   // an unset YEAR env var (main.ts uses `checkpoint.year !== YEAR`).
   const parsed = JSON.parse(JSON.stringify(cp())) as CheckpointData;
   assertEquals(parsed.year, undefined);
+});
+
+// --- resume offset is independent of CHUNK_SIZE ----------------------------
+
+Deno.test("checkpoint records an absolute ticket offset, not a chunk index", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    // A run with CHUNK_SIZE=25 that completed 3 chunks stops at ticket 75.
+    await saveCheckpoint(dir, cp({ nextChunk: undefined, nextTicketIndex: 75 }));
+    const loaded = (await loadCheckpoint(dir))!;
+    // Re-running with any CHUNK_SIZE must resume at the same ticket.
+    assertEquals(loaded.nextTicketIndex, 75);
+    assertEquals(loaded.nextChunk, undefined);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("hasValidFilePositions understands progress from either field", () => {
+  const zero = { ticketsCsv: 0, messagesCsv: 0, dumpJsonl: 0 };
+  // Legacy shape: progress claimed via nextChunk
+  assertEquals(
+    hasValidFilePositions(cp({ nextChunk: 2, nextTicketIndex: undefined, filePositions: zero })),
+    false,
+  );
+  // New shape: progress claimed via nextTicketIndex
+  assertEquals(
+    hasValidFilePositions(cp({ nextChunk: undefined, nextTicketIndex: 75, filePositions: zero })),
+    false,
+  );
+  // No progress claimed at all — zero positions are legitimate
+  assertEquals(
+    hasValidFilePositions(cp({ nextChunk: undefined, nextTicketIndex: 0, filePositions: zero })),
+    true,
+  );
 });
