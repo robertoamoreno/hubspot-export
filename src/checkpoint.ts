@@ -17,6 +17,8 @@ export interface CheckpointData {
     totalEmails: number;
     totalConversations: number;
     errors: number;
+    /** Tickets exported with known-missing email data. Absent in old checkpoints. */
+    incompleteTickets?: number;
   };
 }
 

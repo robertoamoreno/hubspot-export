@@ -135,6 +135,7 @@ Messages:     95432
   Emails:     62100
   Conversations: 33332
 Errors:       3
+Incomplete:   12 tickets missing some email data
 Output dir:   ./output/
   tickets.csv   - ticket metadata
   messages.csv  - all conversation messages
@@ -237,6 +238,19 @@ The tool has built-in rate limiting with automatic retry and exponential backoff
 ```bash
 docker run --env-file .env -e CONCURRENCY=5 -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
 ```
+
+### `Completed with N error(s) — this export is missing data`
+
+Some batches could not be read from HubSpot, so the tickets they covered were
+written without their emails. The run exits with a non-zero status when this
+happens, and the `Incomplete:` line reports how many tickets are affected.
+
+When a batch fails with a per-record error (a 4xx), the tool splits it in half
+and retries so a single bad record doesn't cost the whole batch — the warnings
+name the ids it could not read. Rate limits and server errors are not split;
+those are retried with backoff instead, and lower `CONCURRENCY` if they persist.
+
+A run that reports `Errors: 0` exits `0` and its output is complete.
 
 ### The output files are empty
 
