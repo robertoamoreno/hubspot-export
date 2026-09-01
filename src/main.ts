@@ -6,6 +6,7 @@ import {
   fetchTicketPipelines,
   fetchTicketProperties,
   fetchTicketsBatch,
+  filterStagePropertiesForPipeline,
   resolvePipeline,
 } from "./tickets.ts";
 import type { TicketPipeline } from "./tickets.ts";
@@ -73,8 +74,10 @@ async function main() {
   // --- Resolve the pipeline filter first: it is part of the checkpoint and
   // cache identity, and a typo should fail before any bulk work starts ---
   let pipeline: TicketPipeline | undefined;
+  let allPipelines: TicketPipeline[] = [];
   if (PIPELINE) {
-    pipeline = resolvePipeline(PIPELINE, await fetchTicketPipelines());
+    allPipelines = await fetchTicketPipelines();
+    pipeline = resolvePipeline(PIPELINE, allPipelines);
     console.log(`Filtering tickets to pipeline: ${pipeline.label} (${pipeline.id})\n`);
   }
 
@@ -140,10 +143,25 @@ async function main() {
   }
 
   // --- Load or fetch ticket properties (always try cache first) ---
-  let properties = await loadProperties(OUTPUT_DIR);
+  let properties = await loadProperties(OUTPUT_DIR, pipeline?.id);
   if (!properties) {
     properties = await fetchTicketProperties();
-    await saveProperties(OUTPUT_DIR, properties);
+    if (pipeline) {
+      const before = properties.length;
+      properties = filterStagePropertiesForPipeline(
+        properties,
+        pipeline,
+        allPipelines,
+      );
+      const dropped = before - properties.length;
+      if (dropped > 0) {
+        console.log(
+          `Dropped ${dropped} stage properties belonging to other pipelines ` +
+          `(${before} -> ${properties.length} ticket columns).`,
+        );
+      }
+    }
+    await saveProperties(OUTPUT_DIR, properties, pipeline?.id);
   } else {
     console.log(`Loaded ${properties.length} ticket properties from cache.`);
   }

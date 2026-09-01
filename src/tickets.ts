@@ -8,6 +8,8 @@ export interface TicketProperty {
 export interface TicketPipeline {
   id: string;
   label: string;
+  /** Ids of the stages belonging to this pipeline. */
+  stageIds: string[];
 }
 
 export interface Ticket {
@@ -28,13 +30,21 @@ export async function fetchTicketProperties(): Promise<TicketProperty[]> {
 }
 
 interface PipelinesResponse {
-  results: Array<{ id: string; label: string }>;
+  results: Array<{
+    id: string;
+    label: string;
+    stages?: Array<{ id: string }>;
+  }>;
 }
 
 /** Fetch the ticket pipelines defined in the portal. */
 export async function fetchTicketPipelines(): Promise<TicketPipeline[]> {
   const data = await hubspotFetch<PipelinesResponse>("/crm/v3/pipelines/tickets");
-  return data.results.map((p) => ({ id: p.id, label: p.label }));
+  return data.results.map((p) => ({
+    id: p.id,
+    label: p.label,
+    stageIds: (p.stages ?? []).map((s) => s.id),
+  }));
 }
 
 /**
@@ -72,6 +82,39 @@ interface SearchResponse {
   results: Array<{ id: string }>;
   paging?: { next?: { after: string } };
   total: number;
+}
+
+/**
+ * A HubSpot-generated, stage-scoped property: hs_* ending in a stage id, e.g.
+ * hs_v2_date_entered_1358949122 or hs_v2_cumulative_time_in_2.
+ */
+const STAGE_SCOPED_PROPERTY = /^hs_.*_(\d+)$/;
+
+/**
+ * Drop stage properties belonging to pipelines other than the one being
+ * exported.
+ *
+ * HubSpot generates four properties per pipeline stage (date entered, date
+ * exited, cumulative time in, latest time in). A portal with 32 pipelines and
+ * 208 stages carries 790 of them — over half of every ticket row — and a
+ * ticket in one pipeline can never have a value for another pipeline's stages.
+ *
+ * Only names starting with hs_ and ending in a *known* stage id are
+ * considered, so custom properties are never touched.
+ */
+export function filterStagePropertiesForPipeline(
+  properties: TicketProperty[],
+  pipeline: TicketPipeline,
+  allPipelines: TicketPipeline[],
+): TicketProperty[] {
+  const known = new Set(allPipelines.flatMap((p) => p.stageIds));
+  const keep = new Set(pipeline.stageIds);
+  return properties.filter((prop) => {
+    const stageId = STAGE_SCOPED_PROPERTY.exec(prop.name)?.[1];
+    if (stageId === undefined) return true;
+    if (!known.has(stageId)) return true;
+    return keep.has(stageId);
+  });
 }
 
 /** Search filters for a createdate window, optionally narrowed to one pipeline. */
