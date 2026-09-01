@@ -186,13 +186,14 @@ One row per message. Contains the full conversation history for all tickets.
 | `ticket_id` | Which ticket this belongs to | `12345678` |
 | `message_id` | Unique message ID | `msg_abc123` |
 | `timestamp` | When the message was sent | `2024-01-15T10:30:00Z` |
-| `direction` | `INCOMING` (customer) or `OUTGOING` (agent) | `INCOMING` |
+| `direction` | `INCOMING` (customer), `OUTGOING` (agent), or `UNKNOWN` — normalised across both sources | `INCOMING` |
 | `sender` | Sender's email address | `john@example.com` |
 | `recipient` | Recipient's email address | `support@company.com` |
 | `subject` | Email subject line | `Re: Cannot login` |
 | `body` | Message content (plain text) | `I tried resetting my password but...` |
 | `source_type` | `EMAIL` or `CONVERSATION` | `EMAIL` |
 | `thread_id` | Conversation thread ID (conversations only) | `thread_789` |
+| `direction_raw` | The unnormalised value HubSpot returned. Emails use `EMAIL` (meaning *sent*) and `INCOMING_EMAIL`; conversations use `OUTGOING` and `INCOMING` | `INCOMING_EMAIL` |
 
 ### `dump.jsonl`
 
