@@ -20,6 +20,31 @@ export interface CheckpointData {
   };
 }
 
+/**
+ * Whether a checkpoint's file positions can be safely resumed from.
+ *
+ * Earlier versions read these positions off an append-mode file descriptor,
+ * which reports offset 0 until the first write in the process. A chunk that
+ * wrote no tickets therefore recorded {0, 0, 0}, and resuming from it would
+ * truncate every output file — headers included — to nothing.
+ *
+ * A checkpoint claiming completed chunks must have non-zero CSV positions,
+ * because both CSVs get a header row before any ticket is written.
+ * dump.jsonl legitimately stays at 0 if no ticket has been written yet.
+ */
+export function hasValidFilePositions(cp: CheckpointData): boolean {
+  const p = cp.filePositions;
+  if (!p) return false;
+  const values = [p.ticketsCsv, p.messagesCsv, p.dumpJsonl];
+  if (values.some((v) => typeof v !== "number" || !Number.isFinite(v) || v < 0)) {
+    return false;
+  }
+  if (cp.nextChunk > 0 && (p.ticketsCsv === 0 || p.messagesCsv === 0)) {
+    return false;
+  }
+  return true;
+}
+
 /** Save checkpoint atomically (write tmp + rename). */
 export async function saveCheckpoint(
   outputDir: string,
