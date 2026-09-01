@@ -63,6 +63,7 @@ async function main() {
   let totalEmails = 0;
   let totalConversations = 0;
   let errors = 0;
+  let incompleteTickets = 0;
 
   if (checkpoint) {
     if (checkpoint.year !== YEAR) {
@@ -86,6 +87,7 @@ async function main() {
       totalEmails = checkpoint.stats.totalEmails;
       totalConversations = checkpoint.stats.totalConversations;
       errors = checkpoint.stats.errors;
+      incompleteTickets = checkpoint.stats.incompleteTickets ?? 0;
       console.log(
         `Resuming from checkpoint: chunk ${startChunk} ` +
         `(${processed} tickets already processed, ` +
@@ -155,11 +157,32 @@ async function main() {
     const tickets = await fetchTicketsBatch(chunkIds, propertyNames);
 
     // 2b. Fetch email associations for this chunk
-    const emailAssociations = await batchGetEmailAssociations(chunkIds);
+    const { associations: emailAssociations, failedTicketIds } =
+      await batchGetEmailAssociations(chunkIds);
     const chunkEmailIds = [...new Set([...emailAssociations.values()].flat())];
 
     // 2c. Fetch email content for this chunk
-    const emailCache = await batchFetchEmails(chunkEmailIds);
+    const { emails: emailCache, failedEmailIds } = await batchFetchEmails(
+      chunkEmailIds,
+    );
+
+    // A ticket whose associations or email bodies we could not read gets
+    // exported as if it simply had no emails. Count those explicitly so a
+    // dropped batch can't pass for a clean run.
+    if (failedTicketIds.length > 0 || failedEmailIds.length > 0) {
+      const failedEmails = new Set(failedEmailIds);
+      const incomplete = new Set(failedTicketIds);
+      for (const [ticketId, ids] of emailAssociations) {
+        if (ids.some((id) => failedEmails.has(id))) incomplete.add(ticketId);
+      }
+      errors += failedTicketIds.length + failedEmailIds.length;
+      incompleteTickets += incomplete.size;
+      console.warn(
+        `  WARNING: ${incomplete.size} ticket(s) in this chunk have incomplete ` +
+        `email data (${failedTicketIds.length} association lookup(s) and ` +
+        `${failedEmailIds.length} email body fetch(es) failed).`,
+      );
+    }
 
     // 2d. Fetch conversations & write output for this chunk
     await parallelStream<typeof tickets[0], TicketDump>(
@@ -217,7 +240,13 @@ async function main() {
       nextChunk: chunkIdx + 1,
       year: YEAR,
       filePositions,
-      stats: { processed, totalEmails, totalConversations, errors },
+      stats: {
+        processed,
+        totalEmails,
+        totalConversations,
+        errors,
+        incompleteTickets,
+      },
     });
     console.log(`  [Checkpoint saved: ${processed} tickets complete]\n`);
 
@@ -236,10 +265,21 @@ async function main() {
   console.log(`  Emails:     ${totalEmails}`);
   console.log(`  Conversations: ${totalConversations}`);
   console.log(`Errors:       ${errors}`);
+  if (incompleteTickets > 0) {
+    console.log(`Incomplete:   ${incompleteTickets} tickets missing some email data`);
+  }
   console.log(`Output dir:   ${OUTPUT_DIR}/`);
   console.log(`  tickets.csv   - ticket metadata`);
   console.log(`  messages.csv  - all conversation messages`);
   console.log(`  dump.jsonl    - full structured data`);
+
+  if (errors > 0) {
+    console.error(
+      `\nCompleted with ${errors} error(s) — this export is missing data. ` +
+      `Review the warnings above before treating it as complete.`,
+    );
+    Deno.exit(1);
+  }
 }
 
 main().catch((err) => {
