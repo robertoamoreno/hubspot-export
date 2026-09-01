@@ -67,7 +67,8 @@ Deno.test("DumpWriter round-trips a multi-megabyte message body intact", async (
         id: "m1",
         subject: "s",
         body,
-        direction: "INCOMING",
+        direction: "INCOMING" as const,
+        directionRaw: "INCOMING_EMAIL",
         sender: "a@b.c",
         recipient: "d@e.f",
         timestamp: "2024-01-01T00:00:00Z",
@@ -94,7 +95,8 @@ function ticketDump(id: string, messageCount: number) {
       id: `${id}-m${i}`,
       subject: "hello, world",           // comma forces CSV quoting
       body: `line one\nline two ${i}`,   // newline forces CSV quoting
-      direction: "INCOMING",
+      direction: "INCOMING" as const,
+      directionRaw: "INCOMING_EMAIL",
       sender: "a@b.c",
       recipient: "d@e.f",
       timestamp: "2024-01-01T00:00:00Z",

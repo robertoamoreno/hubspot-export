@@ -1,5 +1,5 @@
 import { getClient, hubspotFetch, isSplittable } from "./hubspot.ts";
-import { stripHtml } from "./utils.ts";
+import { type Direction, normalizeDirection, stripHtml } from "./utils.ts";
 
 const EMAIL_PROPERTIES = [
   "hs_email_subject",
@@ -16,7 +16,9 @@ export interface EmailMessage {
   id: string;
   subject: string;
   body: string;
-  direction: string;
+  direction: Direction;
+  /** The raw hs_email_direction value, before normalisation. */
+  directionRaw: string;
   sender: string;
   recipient: string;
   timestamp: string;
@@ -147,7 +149,8 @@ export async function batchFetchEmails(
         id: email.id,
         subject: p.hs_email_subject || "",
         body: bodyText,
-        direction: p.hs_email_direction || "UNKNOWN",
+        direction: normalizeDirection(p.hs_email_direction || ""),
+        directionRaw: p.hs_email_direction || "",
         sender: p.hs_email_sender_email || p.hs_email_from_email || "",
         recipient: p.hs_email_to_email || "",
         timestamp: p.hs_timestamp || "",

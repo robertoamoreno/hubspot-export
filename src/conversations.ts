@@ -1,11 +1,13 @@
 import { hubspotFetch } from "./hubspot.ts";
-import { stripHtml } from "./utils.ts";
+import { type Direction, normalizeDirection, stripHtml } from "./utils.ts";
 
 export interface ConversationMessage {
   id: string;
   subject: string;
   body: string;
-  direction: string;
+  direction: Direction;
+  /** The raw conversations API direction value, before normalisation. */
+  directionRaw: string;
   sender: string;
   recipient: string;
   timestamp: string;
@@ -128,7 +130,8 @@ async function fetchThreadMessages(
           id: msg.id,
           subject: msg.subject || "",
           body,
-          direction: msg.direction || "UNKNOWN",
+          direction: normalizeDirection(msg.direction || ""),
+          directionRaw: msg.direction || "",
           sender,
           recipient,
           timestamp: msg.createdAt,

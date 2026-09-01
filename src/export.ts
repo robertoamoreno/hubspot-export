@@ -20,6 +20,7 @@ const MESSAGES_CSV_HEADER = [
   "body",
   "source_type",
   "thread_id",
+  "direction_raw",
 ].join(",");
 
 /** Escape a value for CSV (RFC 4180). */
@@ -236,6 +237,7 @@ export class DumpWriter {
         msg.body,
         msg.sourceType,
         threadId,
+        msg.directionRaw,
       ]
         .map(csvEscape)
         .join(",");
