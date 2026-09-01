@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { DumpWriter, writeAll } from "./export.ts";
+import { buildTicketHeaders, DumpWriter, writeAll } from "./export.ts";
 import type { TicketProperty } from "./tickets.ts";
 
 /** A sink that accepts at most `chunk` bytes per write(), like a short write. */
@@ -233,5 +233,60 @@ Deno.test("resume refuses to grow a file that is shorter than the checkpoint", a
       Error,
       "out of sync",
     );
+  });
+});
+
+// --- header collisions -----------------------------------------------------
+
+Deno.test("distinct labels are left exactly as they are", () => {
+  const h = buildTicketHeaders([
+    { name: "subject", label: "Ticket name" },
+    { name: "hs_pipeline", label: "Pipeline" },
+  ]);
+  assertEquals(h, ["Ticket name", "Pipeline", "Message Count", "URL"]);
+});
+
+Deno.test("two properties sharing a label are disambiguated by internal name", () => {
+  // Real collision from a production portal.
+  const h = buildTicketHeaders([
+    { name: "onb_pth_team_questionnaire_complete", label: "Team Questionnaire Completed" },
+    { name: "team_questionnaire_completed", label: "Team Questionnaire Completed" },
+    { name: "subject", label: "Ticket name" },
+  ]);
+  assertEquals(h, [
+    "Team Questionnaire Completed (onb_pth_team_questionnaire_complete)",
+    "Team Questionnaire Completed (team_questionnaire_completed)",
+    "Ticket name",
+    "Message Count",
+    "URL",
+  ]);
+  assertEquals(new Set(h).size, h.length); // every header unique
+});
+
+Deno.test("a property colliding with an appended column is disambiguated", () => {
+  const h = buildTicketHeaders([
+    { name: "custom_url", label: "URL" },
+    { name: "n_msgs", label: "Message Count" },
+  ]);
+  assertEquals(h, ["URL (custom_url)", "Message Count (n_msgs)", "Message Count", "URL"]);
+  assertEquals(new Set(h).size, h.length);
+});
+
+Deno.test("header count always matches the written row width", async () => {
+  await withTempDir(async (dir) => {
+    const props: TicketProperty[] = [
+      { name: "a", label: "Dup" },
+      { name: "b", label: "Dup" },
+      { name: "c", label: "Solo" },
+    ];
+    const w = await DumpWriter.create(dir, props);
+    await w.writeTicket({
+      ticket: { id: "1", properties: { a: "1", b: "2", c: "3" } },
+      messages: [],
+    });
+    await w.close();
+    const rows = (await Deno.readTextFile(`${dir}/tickets.csv`)).trimEnd().split("\n");
+    assertEquals(rows[0].split(",").length, rows[1].split(",").length);
+    assertEquals(rows[0], "Dup (a),Dup (b),Solo,Message Count,URL");
   });
 });
