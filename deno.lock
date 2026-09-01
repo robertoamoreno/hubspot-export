@@ -3,8 +3,11 @@
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/async@1": "1.2.0",
+    "jsr:@std/bytes@^1.0.6": "1.0.6",
+    "jsr:@std/csv@1": "1.0.6",
     "jsr:@std/dotenv@~0.225.3": "0.225.6",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@std/streams@^1.0.9": "1.1.2",
     "npm:@hubspot/api-client@^13.5.0": "13.5.0",
     "npm:html-to-text@^9.0.5": "9.0.5"
   },
@@ -18,11 +21,26 @@
     "@std/async@1.2.0": {
       "integrity": "c059c6f6d95ca7cc012ae8e8d7164d1697113d54b0b679e4372b354b11c2dee5"
     },
+    "@std/bytes@1.0.6": {
+      "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
+    },
+    "@std/csv@1.0.6": {
+      "integrity": "52ef0e62799a0028d278fa04762f17f9bd263fad9a8e7f98c14fbd371d62d9fd",
+      "dependencies": [
+        "jsr:@std/streams"
+      ]
+    },
     "@std/dotenv@0.225.6": {
       "integrity": "1d6f9db72f565bd26790fa034c26e45ecb260b5245417be76c2279e5734c421b"
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@std/streams@1.1.2": {
+      "integrity": "0249bf9b78a999f57032ca4d8e7ccaa57579090242640b35ddc948fbb745d3af",
+      "dependencies": [
+        "jsr:@std/bytes"
+      ]
     }
   },
   "npm": {
@@ -320,6 +338,7 @@
     "dependencies": [
       "jsr:@std/assert@1",
       "jsr:@std/async@1",
+      "jsr:@std/csv@1",
       "jsr:@std/dotenv@~0.225.3",
       "npm:@hubspot/api-client@^13.5.0",
       "npm:html-to-text@^9.0.5"
