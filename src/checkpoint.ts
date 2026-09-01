@@ -32,6 +32,8 @@ export interface CheckpointData {
     errors: number;
     /** Tickets exported with known-missing email data. Absent in old checkpoints. */
     incompleteTickets?: number;
+    /** Duplicate message copies dropped. Absent in old checkpoints. */
+    duplicatesRemoved?: number;
   };
 }
 
