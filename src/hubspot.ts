@@ -15,7 +15,7 @@ export function getClient(): Client {
   return _client;
 }
 
-class HubSpotApiError extends Error {
+export class HubSpotApiError extends Error {
   constructor(public status: number, path: string, body: string) {
     super(`HubSpot API ${status} ${path}: ${body}`);
   }
@@ -23,6 +23,29 @@ class HubSpotApiError extends Error {
   get retryable(): boolean {
     return this.status === 429 || this.status >= 500;
   }
+}
+
+/**
+ * HTTP status behind a failure, from either a direct hubspotFetch call or the
+ * HubSpot SDK (which puts it on `.code`). Undefined for network-level errors.
+ */
+export function errorStatus(err: unknown): number | undefined {
+  if (err instanceof HubSpotApiError) return err.status;
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "number" ? code : undefined;
+}
+
+/**
+ * Whether a failed batch is worth retrying as smaller batches.
+ *
+ * A 4xx (other than 429) points at specific records in the payload, so
+ * splitting isolates the bad one and salvages the rest. A 429/5xx/network
+ * failure means the API is unhealthy — hubspotFetch has already exhausted its
+ * backoff, and splitting would only multiply the load.
+ */
+export function isSplittable(err: unknown): boolean {
+  const status = errorStatus(err);
+  return status !== undefined && status >= 400 && status < 500 && status !== 429;
 }
 
 /** Direct HTTP call to HubSpot APIs not covered by the SDK, with exponential backoff retry. */
