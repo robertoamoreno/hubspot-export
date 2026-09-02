@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { parseAttachmentIds, parseInlineImages } from "./attachments.ts";
+import { decodeEntities, parseAttachmentIds, parseInlineImages } from "./attachments.ts";
 
 Deno.test("parseAttachmentIds splits HubSpot's semicolon list", () => {
   assertEquals(parseAttachmentIds("184474135197;184472068650"), [
@@ -65,4 +65,29 @@ Deno.test("parseInlineImages copes with a url it cannot parse", () => {
 Deno.test("parseInlineImages returns nothing for HTML without images", () => {
   assertEquals(parseInlineImages("<p>just text</p>"), []);
   assertEquals(parseInlineImages(""), []);
+});
+
+Deno.test("decodeEntities restores an ampersand in a query string", () => {
+  assertEquals(
+    decodeEntities("https://h.net/proxy?portalId=1&amp;url=https://x.io/a.png"),
+    "https://h.net/proxy?portalId=1&url=https://x.io/a.png",
+  );
+});
+
+Deno.test("decodeEntities handles named, decimal and hex forms", () => {
+  assertEquals(decodeEntities("a&amp;b&lt;c&gt;d&quot;e&#39;f&#x27;g"), `a&b<c>d"e'f'g`);
+});
+
+Deno.test("decodeEntities leaves an ordinary url alone", () => {
+  const u = "https://x.io/a.png?a=1&b=2";
+  assertEquals(decodeEntities(u), u);
+});
+
+Deno.test("inline image urls are entity-decoded", () => {
+  // Regression: HubSpot's content proxy links 401'd because &amp; survived.
+  const found = parseInlineImages(
+    `<img src="https://api-na1.hubspot.com/contentproxy/v1/proxy/redirect?portalId=1234567&amp;url=https://x.io/a.png">`,
+  );
+  assertEquals(found[0].url.includes("&amp;"), false);
+  assertEquals(found[0].url.includes("&url="), true);
 });
