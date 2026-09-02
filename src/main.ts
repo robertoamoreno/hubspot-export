@@ -18,6 +18,7 @@ import {
 import { fetchConversationsForTicket } from "./conversations.ts";
 import { dedupeMessages } from "./dedupe.ts";
 import { dropEmptyColumns } from "./compact.ts";
+import { FileResolver } from "./attachments.ts";
 import { DumpWriter } from "./export.ts";
 import type { Message, TicketDump } from "./export.ts";
 import { parallelStream } from "./hubspot.ts";
@@ -94,6 +95,7 @@ async function main() {
   let errors = 0;
   let incompleteTickets = 0;
   let duplicatesRemoved = 0;
+  const fileResolver = new FileResolver();
 
   if (checkpoint) {
     if (checkpoint.year !== YEAR || checkpoint.pipeline !== pipeline?.id) {
@@ -280,6 +282,22 @@ async function main() {
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
 
+        // Email attachments arrive as bare file ids; fill in name and url.
+        for (const m of messages) {
+          const unresolved = m.attachments.filter((a) => a.fileId && !a.url);
+          if (unresolved.length === 0) continue;
+          const resolved = await fileResolver.resolve(
+            unresolved.map((a) => a.fileId),
+          );
+          for (let i = 0; i < unresolved.length; i++) {
+            const r = resolved[i];
+            if (r.url) {
+              unresolved[i].name = r.name;
+              unresolved[i].url = r.url;
+            }
+          }
+        }
+
         let finalMessages = messages;
         if (!SKIP_DEDUPE) {
           const deduped = dedupeMessages(messages);
@@ -353,6 +371,7 @@ async function main() {
   console.log("\n=== Dump Complete ===");
   console.log(`Tickets:      ${processed}`);
   console.log(`Messages:     ${stats.messages}`);
+  console.log(`Attachments:  ${stats.attachments}`);
   console.log(`  Emails:     ${totalEmails}`);
   console.log(`  Conversations: ${totalConversations}`);
   if (duplicatesRemoved > 0) {
@@ -365,6 +384,7 @@ async function main() {
   console.log(`Output dir:   ${OUTPUT_DIR}/`);
   console.log(`  tickets.csv   - ticket metadata`);
   console.log(`  messages.csv  - all conversation messages`);
+  console.log(`  attachments.csv - files referenced by messages`);
   console.log(`  dump.jsonl    - full structured data`);
 
   if (errors > 0) {

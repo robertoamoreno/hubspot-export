@@ -6,12 +6,13 @@ function email(body: string, timestamp: string, id = "e1"): Message {
   return {
     id, subject: "s", body, direction: "OUTGOING", directionRaw: "EMAIL",
     sender: "a@b.c", recipient: "d@e.f", timestamp, sourceType: "EMAIL",
+        attachments: [],
   };
 }
 function convo(body: string, timestamp: string, id = "c1", threadId = "t9"): Message {
   return {
     id, subject: "s", body, direction: "OUTGOING", directionRaw: "OUTGOING",
-    sender: "a@b.c", recipient: "d@e.f", timestamp, sourceType: "CONVERSATION", threadId,
+    sender: "a@b.c", recipient: "d@e.f", timestamp, sourceType: "CONVERSATION", threadId, attachments: [],
   };
 }
 

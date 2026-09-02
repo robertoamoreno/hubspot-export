@@ -201,6 +201,7 @@ Incomplete:   12 tickets missing some email data
 Output dir:   ./output/
   tickets.csv   - ticket metadata
   messages.csv  - all conversation messages
+  attachments.csv - files referenced by messages
   dump.jsonl    - full structured data
 ```
 
@@ -235,6 +236,33 @@ One row per message. Contains the full conversation history for all tickets.
 | `source_type` | `EMAIL` or `CONVERSATION` | `EMAIL` |
 | `thread_id` | Conversation thread ID (conversations only) | `thread_789` |
 | `direction_raw` | The unnormalised value HubSpot returned. Emails use `EMAIL` (meaning *sent*) and `INCOMING_EMAIL`; conversations use `OUTGOING` and `INCOMING` | `INCOMING_EMAIL` |
+
+### `attachments.csv`
+
+One row per file referenced by a message.
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| `ticket_id` | Ticket the file belongs to | `18415718414` |
+| `message_id` | Message the file was attached to | `m_abc123` |
+| `source_type` | `EMAIL` or `CONVERSATION` | `CONVERSATION` |
+| `file_id` | HubSpot file id. Empty for inline images | `184474609443` |
+| `name` | File name | `Screenshot 2025-01-02.png` |
+| `kind` | `IMAGE` or `OTHER` from HubSpot, or `INLINE` for an image found in an email's HTML body | `IMAGE` |
+| `url` | Direct URL. Conversation attachment URLs are publicly readable | `https://….hubspotusercontent-na1.net/…` |
+| `local_path` | Path to the downloaded file, when `DOWNLOAD_ATTACHMENTS=true` | `attachments/184474609443-screenshot.png` |
+
+Three sources feed this file:
+
+- **Conversation attachments** come back inline from the Conversations API with
+  a name and a directly downloadable URL.
+- **Email attachments** appear on the email as `hs_attachment_ids`. Turning an
+  id into a name and URL needs the **`files` scope**, which is not in the three
+  scopes listed above. Without it the ids are still recorded, but `name` and
+  `url` stay empty and the run warns once.
+- **Inline images** are pulled out of `hs_email_html`. The message body is taken
+  from `hs_email_text` whenever it exists — which is almost always — so images
+  present only in the HTML would otherwise never be seen.
 
 ### `dump.jsonl`
 
