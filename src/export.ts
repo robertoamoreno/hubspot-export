@@ -179,7 +179,7 @@ export class DumpWriter {
       // A checkpoint from before attachments.csv existed cannot say where to
       // resume in it, so start the file fresh and say what is missing.
       const attachmentsPath = `${outputDir}/attachments.csv`;
-      let attachmentsStart = resume.attachmentsCsv;
+      const attachmentsStart = resume.attachmentsCsv;
       if (attachmentsStart === undefined) {
         console.warn(
           "  Warning: this checkpoint predates attachment capture. " +

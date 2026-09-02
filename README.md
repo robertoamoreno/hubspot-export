@@ -141,6 +141,36 @@ repeated reply stays a separate row. The count is reported as
 
 To keep both copies, set `SKIP_DEDUPE=true`.
 
+### Downloading attachments
+
+`attachments.csv` records every file a message references. To also fetch the
+files themselves:
+
+```bash
+docker run --env-file .env -e DOWNLOAD_ATTACHMENTS=true -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
+```
+
+By default this fetches real attachments only — the files someone actually
+attached to an email or chat. Inline images (email-signature logos, tracking
+pixels, embedded document thumbnails) are still recorded in `attachments.csv`
+but not downloaded: in a 120-ticket sample they were 3,194 of 3,276 rows. To
+download those too:
+
+```bash
+-e DOWNLOAD_ATTACHMENTS=all
+```
+
+Files land in `output/attachments/`, named `<file_id>-<file name>` so two
+different files sharing a name cannot overwrite each other, and `local_path`
+in `attachments.csv` points at each one. Files already on disk are not
+re-fetched, so an interrupted run is cheap to repeat.
+
+Only attachments with a URL can be downloaded. Conversation attachment URLs
+are publicly readable and work directly. Email attachment ids resolve to URLs
+only with the **`files` scope** — without it those rows have no URL and are
+skipped. A file that cannot be fetched is counted and skipped rather than
+failing the export.
+
 ### Dropping empty ticket columns
 
 `tickets.csv` has one column per ticket property defined in your account, and
@@ -280,6 +310,7 @@ The `output/` folder also contains files used for caching and resume:
 | `properties.json` | Cached property definitions |
 | `properties_p0.json` | Cached property definitions for a pipeline-filtered run (`p<id>`) |
 | `checkpoint.json` | Current progress (deleted on successful completion) |
+| `attachments/` | Downloaded files, when `DOWNLOAD_ATTACHMENTS=true` |
 
 These are safe to delete if you want to force a fresh export.
 
@@ -364,6 +395,7 @@ Check the terminal output for errors. Common causes:
 | `PIPELINE` | No | — | Filter to one ticket pipeline, by name or id (e.g. `"Support Pipeline"` or `0`). Case-insensitive; an unknown value lists the valid pipelines and exits |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
 | `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |
+| `DOWNLOAD_ATTACHMENTS` | No | `false` | `true` downloads real attachments into `output/attachments/`; `all` also downloads inline images (signature logos, tracking pixels) |
 | `DROP_EMPTY_COLUMNS` | No | `false` | Set to `true` to remove ticket columns that are empty across the whole export, as a post-pass |
 | `SKIP_DEDUPE` | No | `false` | Set to `true` to keep both copies of a message that HubSpot returns as both an email and a conversation message |
 

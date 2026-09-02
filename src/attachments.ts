@@ -16,6 +16,30 @@ export interface MessageAttachment {
 const IMG_TAG = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
 
 /**
+ * Decode the HTML entities an attribute value can carry.
+ *
+ * `src="...?portalId=1&amp;url=..."` is a single ampersand once parsed;
+ * leaving it encoded produces a URL whose query string is wrong, which is how
+ * HubSpot's content proxy links ended up 401ing.
+ */
+export function decodeEntities(value: string): string {
+  return value
+    .replace(/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(amp|lt|gt|quot|apos|nbsp));/g,
+      (_m, dec, hex, name) => {
+        if (dec) return String.fromCodePoint(Number(dec));
+        if (hex) return String.fromCodePoint(parseInt(hex, 16));
+        switch (name) {
+          case "amp": return "&";
+          case "lt": return "<";
+          case "gt": return ">";
+          case "quot": return '"';
+          case "apos": return "'";
+          default: return " ";
+        }
+      });
+}
+
+/**
  * Image URLs embedded in an email's HTML body.
  *
  * The exported message body comes from hs_email_text when it exists, which is
@@ -27,7 +51,7 @@ export function parseInlineImages(html: string): MessageAttachment[] {
   const seen = new Set<string>();
   const found: MessageAttachment[] = [];
   for (const m of html.matchAll(IMG_TAG)) {
-    const url = m[1].trim();
+    const url = decodeEntities(m[1].trim());
     if (!url || url.startsWith("cid:") || url.startsWith("data:")) continue;
     if (seen.has(url)) continue;
     seen.add(url);
