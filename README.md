@@ -141,6 +141,36 @@ repeated reply stays a separate row. The count is reported as
 
 To keep both copies, set `SKIP_DEDUPE=true`.
 
+### Downloading attachments
+
+`attachments.csv` records every file a message references. To also fetch the
+files themselves:
+
+```bash
+docker run --env-file .env -e DOWNLOAD_ATTACHMENTS=true -v "$(pwd)/output:/app/output" tempestdx/hubspot-export
+```
+
+By default this fetches real attachments only — the files someone actually
+attached to an email or chat. Inline images (email-signature logos, tracking
+pixels, embedded document thumbnails) are still recorded in `attachments.csv`
+but not downloaded: in a 120-ticket sample they were 3,194 of 3,276 rows. To
+download those too:
+
+```bash
+-e DOWNLOAD_ATTACHMENTS=all
+```
+
+Files land in `output/attachments/`, named `<file_id>-<file name>` so two
+different files sharing a name cannot overwrite each other, and `local_path`
+in `attachments.csv` points at each one. Files already on disk are not
+re-fetched, so an interrupted run is cheap to repeat.
+
+Only attachments with a URL can be downloaded. Conversation attachment URLs
+are publicly readable and work directly. Email attachment ids resolve to URLs
+only with the **`files` scope** — without it those rows have no URL and are
+skipped. A file that cannot be fetched is counted and skipped rather than
+failing the export.
+
 ### Dropping empty ticket columns
 
 `tickets.csv` has one column per ticket property defined in your account, and
@@ -201,6 +231,7 @@ Incomplete:   12 tickets missing some email data
 Output dir:   ./output/
   tickets.csv   - ticket metadata
   messages.csv  - all conversation messages
+  attachments.csv - files referenced by messages
   dump.jsonl    - full structured data
 ```
 
@@ -236,6 +267,33 @@ One row per message. Contains the full conversation history for all tickets.
 | `thread_id` | Conversation thread ID (conversations only) | `thread_789` |
 | `direction_raw` | The unnormalised value HubSpot returned. Emails use `EMAIL` (meaning *sent*) and `INCOMING_EMAIL`; conversations use `OUTGOING` and `INCOMING` | `INCOMING_EMAIL` |
 
+### `attachments.csv`
+
+One row per file referenced by a message.
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| `ticket_id` | Ticket the file belongs to | `18415718414` |
+| `message_id` | Message the file was attached to | `m_abc123` |
+| `source_type` | `EMAIL` or `CONVERSATION` | `CONVERSATION` |
+| `file_id` | HubSpot file id. Empty for inline images | `184474609443` |
+| `name` | File name | `Screenshot 2025-01-02.png` |
+| `kind` | `IMAGE` or `OTHER` from HubSpot, or `INLINE` for an image found in an email's HTML body | `IMAGE` |
+| `url` | Direct URL. Conversation attachment URLs are publicly readable | `https://….hubspotusercontent-na1.net/…` |
+| `local_path` | Path to the downloaded file, when `DOWNLOAD_ATTACHMENTS=true` | `attachments/184474609443-screenshot.png` |
+
+Three sources feed this file:
+
+- **Conversation attachments** come back inline from the Conversations API with
+  a name and a directly downloadable URL.
+- **Email attachments** appear on the email as `hs_attachment_ids`. Turning an
+  id into a name and URL needs the **`files` scope**, which is not in the three
+  scopes listed above. Without it the ids are still recorded, but `name` and
+  `url` stay empty and the run warns once.
+- **Inline images** are pulled out of `hs_email_html`. The message body is taken
+  from `hs_email_text` whenever it exists — which is almost always — so images
+  present only in the HTML would otherwise never be seen.
+
 ### `dump.jsonl`
 
 One JSON object per line, containing the full structured data for each ticket and all its messages. Useful for programmatic processing.
@@ -252,6 +310,7 @@ The `output/` folder also contains files used for caching and resume:
 | `properties.json` | Cached property definitions |
 | `properties_p0.json` | Cached property definitions for a pipeline-filtered run (`p<id>`) |
 | `checkpoint.json` | Current progress (deleted on successful completion) |
+| `attachments/` | Downloaded files, when `DOWNLOAD_ATTACHMENTS=true` |
 
 These are safe to delete if you want to force a fresh export.
 
@@ -336,6 +395,7 @@ Check the terminal output for errors. Common causes:
 | `PIPELINE` | No | — | Filter to one ticket pipeline, by name or id (e.g. `"Support Pipeline"` or `0`). Case-insensitive; an unknown value lists the valid pipelines and exits |
 | `YEAR` | No | — | Filter to tickets created in this year (e.g. `2025`). Uses the Search API; only queries up to the current date and auto-splits large date ranges |
 | `SKIP_CONVERSATIONS` | No | `false` | Set to `true` to skip fetching conversation threads/messages and only export emails. Reduces API calls by ~98% |
+| `DOWNLOAD_ATTACHMENTS` | No | `false` | `true` downloads real attachments into `output/attachments/`; `all` also downloads inline images (signature logos, tracking pixels) |
 | `DROP_EMPTY_COLUMNS` | No | `false` | Set to `true` to remove ticket columns that are empty across the whole export, as a post-pass |
 | `SKIP_DEDUPE` | No | `false` | Set to `true` to keep both copies of a message that HubSpot returns as both an email and a conversation message |
 

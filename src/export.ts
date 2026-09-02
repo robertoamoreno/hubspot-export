@@ -23,6 +23,17 @@ const MESSAGES_CSV_HEADER = [
   "direction_raw",
 ].join(",");
 
+const ATTACHMENTS_CSV_HEADER = [
+  "ticket_id",
+  "message_id",
+  "source_type",
+  "file_id",
+  "name",
+  "kind",
+  "url",
+  "local_path",
+].join(",");
+
 /** Escape a value for CSV (RFC 4180). */
 export function csvEscape(value: string): string {
   if (
@@ -87,15 +98,19 @@ export interface FilePositions {
   ticketsCsv: number;
   messagesCsv: number;
   dumpJsonl: number;
+  /** Absent in checkpoints written before attachments.csv existed. */
+  attachmentsCsv?: number;
 }
 
 export class DumpWriter {
   private ticketsFile: Deno.FsFile;
   private messagesFile: Deno.FsFile;
   private jsonlFile: Deno.FsFile;
+  private attachmentsFile: Deno.FsFile;
   private encoder = new TextEncoder();
   private ticketCount = 0;
   private messageCount = 0;
+  private attachmentCount = 0;
   private properties: TicketProperty[];
   private portalId: string;
   /** Bytes written to each output file, tracked as we go. See getFilePositions(). */
@@ -105,6 +120,7 @@ export class DumpWriter {
     ticketsFile: Deno.FsFile,
     messagesFile: Deno.FsFile,
     jsonlFile: Deno.FsFile,
+    attachmentsFile: Deno.FsFile,
     properties: TicketProperty[],
     portalId: string,
     startPositions: FilePositions,
@@ -112,6 +128,7 @@ export class DumpWriter {
     this.ticketsFile = ticketsFile;
     this.messagesFile = messagesFile;
     this.jsonlFile = jsonlFile;
+    this.attachmentsFile = attachmentsFile;
     this.properties = properties;
     this.portalId = portalId;
     this.pos = { ...startPositions };
@@ -159,6 +176,43 @@ export class DumpWriter {
         await Deno.truncate(path, want);
       }
 
+      // A checkpoint from before attachments.csv existed cannot say where to
+      // resume in it, so start the file fresh and say what is missing.
+      const attachmentsPath = `${outputDir}/attachments.csv`;
+      const attachmentsStart = resume.attachmentsCsv;
+      if (attachmentsStart === undefined) {
+        console.warn(
+          "  Warning: this checkpoint predates attachment capture. " +
+            "attachments.csv will only cover tickets exported from here on; " +
+            "re-run from scratch for a complete set.",
+        );
+        const fresh = await Deno.open(attachmentsPath, {
+          write: true,
+          create: true,
+          truncate: true,
+        });
+        const w = new DumpWriter(
+          await Deno.open(`${outputDir}/tickets.csv`, { write: true, append: true }),
+          await Deno.open(`${outputDir}/messages.csv`, { write: true, append: true }),
+          await Deno.open(`${outputDir}/dump.jsonl`, { write: true, append: true }),
+          fresh,
+          properties,
+          portalId,
+          { ...resume, attachmentsCsv: 0 },
+        );
+        await w.writeLine(fresh, ATTACHMENTS_CSV_HEADER, "attachmentsCsv");
+        return w;
+      }
+      const { size: attSize } = await Deno.stat(attachmentsPath);
+      if (attachmentsStart > attSize) {
+        throw new Error(
+          `Checkpoint expects ${attachmentsPath} to be at least ` +
+            `${attachmentsStart} bytes but it is ${attSize}. Delete ` +
+            `checkpoint.json to restart the export.`,
+        );
+      }
+      await Deno.truncate(attachmentsPath, attachmentsStart);
+
       // Open in append mode
       const ticketsFile = await Deno.open(`${outputDir}/tickets.csv`, {
         write: true,
@@ -172,11 +226,16 @@ export class DumpWriter {
         write: true,
         append: true,
       });
+      const attachmentsFile = await Deno.open(attachmentsPath, {
+        write: true,
+        append: true,
+      });
 
       return new DumpWriter(
         ticketsFile,
         messagesFile,
         jsonlFile,
+        attachmentsFile,
         properties,
         portalId,
         resume,
@@ -199,14 +258,20 @@ export class DumpWriter {
       create: true,
       truncate: true,
     });
+    const attachmentsFile = await Deno.open(`${outputDir}/attachments.csv`, {
+      write: true,
+      create: true,
+      truncate: true,
+    });
 
     const writer = new DumpWriter(
       ticketsFile,
       messagesFile,
       jsonlFile,
+      attachmentsFile,
       properties,
       portalId,
-      { ticketsCsv: 0, messagesCsv: 0, dumpJsonl: 0 },
+      { ticketsCsv: 0, messagesCsv: 0, dumpJsonl: 0, attachmentsCsv: 0 },
     );
 
     await writer.writeLine(
@@ -216,6 +281,11 @@ export class DumpWriter {
     );
 
     await writer.writeLine(messagesFile, MESSAGES_CSV_HEADER, "messagesCsv");
+    await writer.writeLine(
+      attachmentsFile,
+      ATTACHMENTS_CSV_HEADER,
+      "attachmentsCsv",
+    );
     return writer;
   }
 
@@ -224,7 +294,8 @@ export class DumpWriter {
     line: string,
     key: keyof FilePositions,
   ): Promise<void> {
-    this.pos[key] += await writeAll(file, this.encoder.encode(line + "\n"));
+    this.pos[key] = (this.pos[key] ?? 0) +
+      await writeAll(file, this.encoder.encode(line + "\n"));
   }
 
   async writeTicket(dump: TicketDump): Promise<void> {
@@ -265,6 +336,27 @@ export class DumpWriter {
       this.messageCount++;
     }
 
+    // Write attachment rows
+    for (const msg of messages) {
+      for (const att of msg.attachments) {
+        await this.writeLine(
+          this.attachmentsFile,
+          [
+            ticket.id,
+            msg.id,
+            msg.sourceType,
+            att.fileId,
+            att.name,
+            att.kind,
+            att.url,
+            att.localPath ?? "",
+          ].map(csvEscape).join(","),
+          "attachmentsCsv",
+        );
+        this.attachmentCount++;
+      }
+    }
+
     // Write JSONL
     await this.writeLine(this.jsonlFile, JSON.stringify(dump), "dumpJsonl");
   }
@@ -286,9 +378,14 @@ export class DumpWriter {
     this.ticketsFile.close();
     this.messagesFile.close();
     this.jsonlFile.close();
+    this.attachmentsFile.close();
   }
 
-  get stats(): { tickets: number; messages: number } {
-    return { tickets: this.ticketCount, messages: this.messageCount };
+  get stats(): { tickets: number; messages: number; attachments: number } {
+    return {
+      tickets: this.ticketCount,
+      messages: this.messageCount,
+      attachments: this.attachmentCount,
+    };
   }
 }

@@ -18,6 +18,13 @@ import {
 import { fetchConversationsForTicket } from "./conversations.ts";
 import { dedupeMessages } from "./dedupe.ts";
 import { dropEmptyColumns } from "./compact.ts";
+import { FileResolver } from "./attachments.ts";
+import {
+  ATTACHMENTS_DIR,
+  type DownloadMode,
+  type DownloadStats,
+  downloadAttachments,
+} from "./download.ts";
 import { DumpWriter } from "./export.ts";
 import type { Message, TicketDump } from "./export.ts";
 import { parallelStream } from "./hubspot.ts";
@@ -26,6 +33,14 @@ const SKIP_CONVERSATIONS = (Deno.env.get("SKIP_CONVERSATIONS") || "").toLowerCas
 const SKIP_DEDUPE = (Deno.env.get("SKIP_DEDUPE") || "").toLowerCase() === "true";
 const DROP_EMPTY_COLUMNS =
   (Deno.env.get("DROP_EMPTY_COLUMNS") || "").toLowerCase() === "true";
+const DOWNLOAD_ATTACHMENTS_RAW =
+  (Deno.env.get("DOWNLOAD_ATTACHMENTS") || "").toLowerCase();
+const DOWNLOAD_ATTACHMENTS = DOWNLOAD_ATTACHMENTS_RAW === "true" ||
+  DOWNLOAD_ATTACHMENTS_RAW === "all";
+/** "all" also saves inline images; "true" saves only real attachments. */
+const DOWNLOAD_MODE: DownloadMode = DOWNLOAD_ATTACHMENTS_RAW === "all"
+  ? "all"
+  : "files";
 import {
   hasValidFilePositions,
   loadCheckpoint,
@@ -71,8 +86,18 @@ async function main() {
   if (SKIP_DEDUPE) {
     console.log("SKIP_DEDUPE=true — keeping duplicate email/conversation copies\n");
   }
+  if (DOWNLOAD_ATTACHMENTS) {
+    console.log(
+      `DOWNLOAD_ATTACHMENTS=${DOWNLOAD_ATTACHMENTS_RAW} — saving ` +
+      `${DOWNLOAD_MODE === "all" ? "attachments and inline images" : "attachments (not inline images)"} ` +
+      `to ${OUTPUT_DIR}/${ATTACHMENTS_DIR}/\n`,
+    );
+  }
 
   await Deno.mkdir(OUTPUT_DIR, { recursive: true });
+  if (DOWNLOAD_ATTACHMENTS) {
+    await Deno.mkdir(`${OUTPUT_DIR}/${ATTACHMENTS_DIR}`, { recursive: true });
+  }
 
   // --- Resolve the pipeline filter first: it is part of the checkpoint and
   // cache identity, and a typo should fail before any bulk work starts ---
@@ -94,6 +119,13 @@ async function main() {
   let errors = 0;
   let incompleteTickets = 0;
   let duplicatesRemoved = 0;
+  const fileResolver = new FileResolver();
+  const downloads: DownloadStats = {
+    downloaded: 0,
+    skipped: 0,
+    failed: 0,
+    bytes: 0,
+  };
 
   if (checkpoint) {
     if (checkpoint.year !== YEAR || checkpoint.pipeline !== pipeline?.id) {
@@ -280,11 +312,36 @@ async function main() {
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
 
+        // Email attachments arrive as bare file ids; fill in name and url.
+        for (const m of messages) {
+          const unresolved = m.attachments.filter((a) => a.fileId && !a.url);
+          if (unresolved.length === 0) continue;
+          const resolved = await fileResolver.resolve(
+            unresolved.map((a) => a.fileId),
+          );
+          for (let i = 0; i < unresolved.length; i++) {
+            const r = resolved[i];
+            if (r.url) {
+              unresolved[i].name = r.name;
+              unresolved[i].url = r.url;
+            }
+          }
+        }
+
         let finalMessages = messages;
         if (!SKIP_DEDUPE) {
           const deduped = dedupeMessages(messages);
           finalMessages = deduped.messages;
           duplicatesRemoved += deduped.removed;
+        }
+
+        if (DOWNLOAD_ATTACHMENTS) {
+          await downloadAttachments(
+            finalMessages,
+            OUTPUT_DIR,
+            downloads,
+            DOWNLOAD_MODE,
+          );
         }
 
         processed++;
@@ -353,6 +410,14 @@ async function main() {
   console.log("\n=== Dump Complete ===");
   console.log(`Tickets:      ${processed}`);
   console.log(`Messages:     ${stats.messages}`);
+  console.log(`Attachments:  ${stats.attachments}`);
+  if (DOWNLOAD_ATTACHMENTS) {
+    const mb = (downloads.bytes / 1e6).toFixed(1);
+    console.log(
+      `  Downloaded: ${downloads.downloaded} new, ${downloads.skipped} already on disk, ` +
+      `${downloads.failed} failed (${mb} MB)`,
+    );
+  }
   console.log(`  Emails:     ${totalEmails}`);
   console.log(`  Conversations: ${totalConversations}`);
   if (duplicatesRemoved > 0) {
@@ -365,6 +430,7 @@ async function main() {
   console.log(`Output dir:   ${OUTPUT_DIR}/`);
   console.log(`  tickets.csv   - ticket metadata`);
   console.log(`  messages.csv  - all conversation messages`);
+  console.log(`  attachments.csv - files referenced by messages`);
   console.log(`  dump.jsonl    - full structured data`);
 
   if (errors > 0) {
