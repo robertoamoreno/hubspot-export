@@ -1,5 +1,10 @@
 import { getClient, hubspotFetch, isSplittable } from "./hubspot.ts";
 import { type Direction, normalizeDirection, stripHtml } from "./utils.ts";
+import {
+  type MessageAttachment,
+  parseAttachmentIds,
+  parseInlineImages,
+} from "./attachments.ts";
 
 const EMAIL_PROPERTIES = [
   "hs_email_subject",
@@ -10,6 +15,7 @@ const EMAIL_PROPERTIES = [
   "hs_email_sender_email",
   "hs_email_to_email",
   "hs_email_from_email",
+  "hs_attachment_ids",
 ];
 
 export interface EmailMessage {
@@ -25,6 +31,11 @@ export interface EmailMessage {
   sourceType: "EMAIL";
   /** Set when a duplicate conversation copy was merged in. See dedupeMessages. */
   threadId?: string;
+  /**
+   * Files on this email. Inline images come from the HTML body; entries with
+   * only a fileId are unresolved attachment ids (see FileResolver).
+   */
+  attachments: MessageAttachment[];
 }
 
 export interface AssociationFetchResult {
@@ -147,6 +158,17 @@ export async function batchFetchEmails(
       const p = email.properties;
       const rawText = p.hs_email_text || p.hs_email_html || "";
       const bodyText = stripHtml(rawText);
+      // The plain-text part wins for the body, so images only present in the
+      // HTML would otherwise never be seen at all.
+      const attachments: MessageAttachment[] = [
+        ...parseInlineImages(p.hs_email_html || ""),
+        ...parseAttachmentIds(p.hs_attachment_ids).map((id) => ({
+          fileId: id,
+          name: "",
+          kind: "OTHER",
+          url: "",
+        })),
+      ];
       emails.set(email.id, {
         id: email.id,
         subject: p.hs_email_subject || "",
@@ -157,6 +179,7 @@ export async function batchFetchEmails(
         recipient: p.hs_email_to_email || "",
         timestamp: p.hs_timestamp || "",
         sourceType: "EMAIL",
+        attachments,
       });
     }
   };

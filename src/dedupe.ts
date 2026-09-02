@@ -27,8 +27,16 @@ function merge(a: Message, b: Message): Message {
     : b.sourceType === "CONVERSATION"
     ? b
     : undefined;
-  if (!email) return a; // two conversation copies: keep the first
-  return convo ? { ...email, threadId: convo.threadId } : email;
+  // Keep every file from both copies, matched on fileId (or url for inline).
+  const merged = [...a.attachments];
+  for (const att of b.attachments) {
+    const key = att.fileId || att.url;
+    if (!merged.some((m) => (m.fileId || m.url) === key)) merged.push(att);
+  }
+  if (!email) return { ...a, attachments: merged }; // two conversation copies
+  return convo
+    ? { ...email, threadId: convo.threadId, attachments: merged }
+    : { ...email, attachments: merged };
 }
 
 /**
