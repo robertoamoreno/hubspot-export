@@ -1,5 +1,6 @@
 import { hubspotFetch } from "./hubspot.ts";
 import { type Direction, normalizeDirection, stripHtml } from "./utils.ts";
+import type { MessageAttachment } from "./attachments.ts";
 
 export interface ConversationMessage {
   id: string;
@@ -13,6 +14,8 @@ export interface ConversationMessage {
   timestamp: string;
   sourceType: "CONVERSATION";
   threadId: string;
+  /** Files the API returned with this message. */
+  attachments: MessageAttachment[];
 }
 
 interface ThreadsListResponse {
@@ -45,6 +48,13 @@ interface ThreadMessagesResponse {
       deliveryIdentifier?: { type: string; value: string };
     }>;
     direction?: string;
+    attachments?: Array<{
+      type?: string;
+      fileId?: string;
+      name?: string;
+      fileUsageType?: string;
+      url?: string;
+    }>;
   }>;
   paging?: { next?: { after: string } };
 }
@@ -114,7 +124,10 @@ async function fetchThreadMessages(
 
         const rawBody = msg.text || msg.richText || "";
         const body = stripHtml(rawBody);
-        if (!body) continue;
+        const attached = msg.attachments ?? [];
+        // A message can be nothing but a file — dropping it on an empty body
+        // would lose the attachment with it.
+        if (!body && attached.length === 0) continue;
 
         const sender =
           msg.senders?.[0]?.deliveryIdentifier?.value ||
@@ -125,6 +138,15 @@ async function fetchThreadMessages(
           msg.recipients?.[0]?.deliveryIdentifier?.value ||
           msg.recipients?.[0]?.actorId ||
           "";
+
+        const attachments: MessageAttachment[] = attached.map(
+          (a) => ({
+            fileId: a.fileId ?? "",
+            name: a.name ?? "",
+            kind: a.fileUsageType ?? a.type ?? "OTHER",
+            url: a.url ?? "",
+          }),
+        );
 
         messages.push({
           id: msg.id,
@@ -137,6 +159,7 @@ async function fetchThreadMessages(
           timestamp: msg.createdAt,
           sourceType: "CONVERSATION",
           threadId,
+          attachments,
         });
       }
 

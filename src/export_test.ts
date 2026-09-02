@@ -73,6 +73,7 @@ Deno.test("DumpWriter round-trips a multi-megabyte message body intact", async (
         recipient: "d@e.f",
         timestamp: "2024-01-01T00:00:00Z",
         sourceType: "EMAIL",
+        attachments: [],
       }],
     });
     await writer.close();
@@ -101,6 +102,7 @@ function ticketDump(id: string, messageCount: number) {
       recipient: "d@e.f",
       timestamp: "2024-01-01T00:00:00Z",
       sourceType: "EMAIL" as const,
+        attachments: [],
     })),
   };
 }
@@ -110,6 +112,7 @@ async function sizes(dir: string) {
     ticketsCsv: (await Deno.stat(`${dir}/tickets.csv`)).size,
     messagesCsv: (await Deno.stat(`${dir}/messages.csv`)).size,
     dumpJsonl: (await Deno.stat(`${dir}/dump.jsonl`)).size,
+    attachmentsCsv: (await Deno.stat(`${dir}/attachments.csv`)).size,
   };
 }
 
@@ -288,5 +291,53 @@ Deno.test("header count always matches the written row width", async () => {
     const rows = (await Deno.readTextFile(`${dir}/tickets.csv`)).trimEnd().split("\n");
     assertEquals(rows[0].split(",").length, rows[1].split(",").length);
     assertEquals(rows[0], "Dup (a),Dup (b),Solo,Message Count,URL");
+  });
+});
+
+// --- attachments.csv -------------------------------------------------------
+
+Deno.test("attachments are written as one row per file", async () => {
+  await withTempDir(async (dir) => {
+    const w = await DumpWriter.create(dir, PROPS);
+    await w.writeTicket({
+      ticket: { id: "42", properties: { subject: "s", hs_pipeline: "0" } },
+      messages: [{
+        id: "m1", subject: "s", body: "see attached",
+        direction: "INCOMING" as const, directionRaw: "INCOMING",
+        sender: "a@b.c", recipient: "d@e.f",
+        timestamp: "2025-01-01T00:00:00Z", sourceType: "CONVERSATION",
+        threadId: "t1",
+        attachments: [
+          { fileId: "1844", name: "Screenshot, v2.png", kind: "IMAGE", url: "https://h.net/a.png" },
+          { fileId: "1845", name: "notes.pdf", kind: "OTHER", url: "https://h.net/b.pdf" },
+        ],
+      }],
+    });
+    await w.close();
+
+    const rows = (await Deno.readTextFile(`${dir}/attachments.csv`))
+      .trimEnd().split("\n");
+    assertEquals(rows.length, 3); // header + 2
+    assertEquals(
+      rows[0],
+      "ticket_id,message_id,source_type,file_id,name,kind,url,local_path",
+    );
+    // the comma in the filename must be quoted, not split the row
+    assertEquals(
+      rows[1],
+      '42,m1,CONVERSATION,1844,"Screenshot, v2.png",IMAGE,https://h.net/a.png,',
+    );
+    assertEquals(w.stats.attachments, 2);
+  });
+});
+
+Deno.test("a ticket with no attachments writes only the header", async () => {
+  await withTempDir(async (dir) => {
+    const w = await DumpWriter.create(dir, PROPS);
+    await w.writeTicket(ticketDump("1", 2));
+    await w.close();
+    const text = await Deno.readTextFile(`${dir}/attachments.csv`);
+    assertEquals(text.trimEnd().split("\n").length, 1);
+    assertEquals(w.stats.attachments, 0);
   });
 });
